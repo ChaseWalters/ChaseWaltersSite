@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "postbuild": "cpy \"dist/index.html\" --rename=404.html -o dist",
+    "postbuild": "cpy dist/index.html dist/404.html",
     "lint": "eslint .",
     "preview": "vite preview",
     "predeploy": "npm run build && npm run postbuild",
