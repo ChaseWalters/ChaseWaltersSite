@@ -7,13 +7,13 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "postbuild": "cpy dist/index.html dist/404.html",
+    "clean": "rm -rf dist",
+    "postbuild": "rm -rf dist/404.html && cp dist/index.html dist/404.html",
     "lint": "eslint .",
     "preview": "vite preview",
-    "predeploy": "npm run build && npm run postbuild",
-    "deploy": "gh-pages -d dist -f"
+    "predeploy": "npm run clean && npm run build && npm run postbuild",
+    "deploy": "cd dist && gh-pages -d . -f"
   },
-
   "dependencies": {
     "@firebase/app-types": "^0.9.3",
     "@firebase/firestore": "^4.7.17",
