@@ -7,7 +7,7 @@ import ManageTasks from "./pages/ManageTasks";
 import SharedBoard from "./components/SharedBoard";
 import CreateBoard from "./components/CreateBoard";
 
-export default function App() {
+function App() {
     const [tasksPool, setTasksPool] = useState([
         {
             name: "Complete 1 achievement task",
@@ -180,14 +180,14 @@ export default function App() {
     ]);
 
     return (
-        <Router>
-            <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/game" element={<TaskBingo tasksPool={tasksPool} setTasksPool={setTasksPool} />} />
-                <Route path="/manage-tasks" element={<ManageTasks tasksPool={tasksPool} setTasksPool={setTasksPool} />} />
-                <Route path="/create-board" element={<CreateBoard />} />
-                <Route path="/shared/:cardId" element={<SharedBoard />} />
-            </Routes>
-        </Router>
+        <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/game" element={<TaskBingo tasksPool={tasksPool} setTasksPool={setTasksPool} />} />
+            <Route path="/manage-tasks" element={<ManageTasks tasksPool={tasksPool} setTasksPool={setTasksPool} />} />
+            <Route path="/create-board" element={<CreateBoard />} />
+            <Route path="/shared/:cardId" element={<SharedBoard />} />
+        </Routes>
     );
 }
+
+export default App;
