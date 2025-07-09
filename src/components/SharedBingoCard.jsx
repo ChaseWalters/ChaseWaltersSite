@@ -26,6 +26,13 @@ export default function SharedBingoCard({ cardId }) {
     const [soloPassword, setSoloPassword] = useState("");
     const [soloError, setSoloError] = useState("");
 
+    // Manual unlock state
+    const [pendingManualUnlocks, setPendingManualUnlocks] = useState(null);
+    const [pendingClaimTileIndex, setPendingClaimTileIndex] = useState(null);
+
+    // Tile scaling
+    const [tileSize, setTileSize] = useState(64);
+
     useEffect(() => {
         const cardRef = doc(db, "bingoCards", cardId);
         const unsubscribe = onSnapshot(cardRef, (docSnapshot) => {
@@ -38,6 +45,7 @@ export default function SharedBingoCard({ cardId }) {
         return () => unsubscribe();
     }, [cardId]);
 
+    // --- Early loading/error states ---
     if (cardData === null) {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center">
@@ -55,12 +63,17 @@ export default function SharedBingoCard({ cardId }) {
         );
     }
 
-    // --- Per-team unlock setting ---
+    // --- Extract key settings ---
     const isSoloMode = cardData && cardData.mode === "individual";
     const isTeamMode = cardData && (cardData.mode === "teams" || cardData.mode === "multi-claim");
-    const perTeamUnlocks = !!cardData.perTeamUnlocks; // If not set, defaults to false (legacy boards)
+    const perTeamUnlocks = !!cardData.perTeamUnlocks;
+    const manualUnlockCount = cardData?.manualUnlockCount || 1;
+    const unlockMode = cardData?.unlockMode || "auto";
+    const boardSize = cardData.gridSize || cardData.boardSize || 5;
+    const teams = cardData.teams || [];
 
 
+    // --- Login/Password UI ---
     if (isSoloMode && !soloAccess) {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-4">
@@ -100,7 +113,7 @@ export default function SharedBingoCard({ cardId }) {
             </div>
         );
     }
-    else if (isTeamMode && !team) { // Login UI for team mode
+    if (isTeamMode && !team) {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-4">
                 <ThemeToggle />
@@ -143,26 +156,7 @@ export default function SharedBingoCard({ cardId }) {
         );
     }
 
-    // Helper: Given a tile (with row, col) and boardSize, return indices of adjacent neighbors (8-way)
-    const getNeighborIndices = (tile, boardSize, neighborMode = "8") => {
-        const neighbors = [];
-        const { row, col } = tile;
-        for (let dr = -1; dr <= 1; dr++) {
-            for (let dc = -1; dc <= 1; dc++) {
-                if (dr === 0 && dc === 0) continue;
-                // If in 4-direction mode, only N/E/S/W (no diagonals)
-                if (neighborMode === "4" && Math.abs(dr) + Math.abs(dc) !== 1) continue;
-                const nr = row + dr;
-                const nc = col + dc;
-                if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize) {
-                    neighbors.push(nr * boardSize + nc);
-                }
-            }
-        }
-        return neighbors;
-    };
-
-    // Login logic
+    // --- Team login logic ---
     async function handleLogin() {
         setLoginError(null);
         if (!teamName || !teamPassword) {
@@ -188,167 +182,7 @@ export default function SharedBingoCard({ cardId }) {
         setLoginError("Incorrect password.");
     }
 
-    // --- Claim tile logic (captain only for team mode, all users for solo) ---
-    const claimTile = async (tileIndex) => {
-        if (!cardData) return;
-
-        const boardSize = cardData.gridSize || cardData.boardSize || 5;
-        const neighborMode = cardData.neighborMode || "8"; // Use board's neighbor mode
-
-        const newTiles = [...cardData.tiles];
-        const tile = newTiles[tileIndex];
-
-        // --- TEAM MODE (multi-claim, per-team unlocks) ---
-        if (isTeamMode) {
-            // Only captains can claim
-            if (!team || role !== "captain") return;
-
-            // Only claim if visible for this team if perTeamUnlocks is enabled
-            let isVisible = true;
-            if (perTeamUnlocks) {
-                const visTeams = Array.isArray(tile.visibleTeams) ? tile.visibleTeams : [];
-                isVisible = visTeams.includes(team.name);
-            } else if (!tile.visible) {
-                isVisible = false;
-            }
-            if (!isVisible) return;
-
-            // Multi-claim logic
-            let claimedBy = Array.isArray(tile.claimedBy)
-                ? [...tile.claimedBy]
-                : tile.claimedBy
-                    ? [tile.claimedBy]
-                    : [];
-            let visibleTeams = Array.isArray(tile.visibleTeams)
-                ? [...tile.visibleTeams]
-                : tile.visibleTeams
-                    ? [tile.visibleTeams]
-                    : [];
-
-            if (claimedBy.includes(team.name)) return; // already claimed by this team
-            claimedBy.push(team.name);
-            if (!visibleTeams.includes(team.name)) visibleTeams.push(team.name);
-
-            newTiles[tileIndex] = {
-                ...tile,
-                claimedBy,
-                visibleTeams,
-                completed: true,
-            };
-
-            // UNLOCK LOGIC: unlock neighbors for your team only (perTeamUnlocks)
-            if (perTeamUnlocks) {
-                // Find all indices of completed tiles for this team
-                const completedIndices = newTiles
-                    .map((t, i) => {
-                        const tClaimed = Array.isArray(t.claimedBy) ? t.claimedBy : t.claimedBy ? [t.claimedBy] : [];
-                        return tClaimed.includes(team?.name) ? i : null;
-                    })
-                    .filter(i => i !== null);
-
-                completedIndices.forEach((i) => {
-                    const t = newTiles[i];
-                    const neighbors = getNeighborIndices(t, boardSize, neighborMode);
-                    neighbors.forEach(nIdx => {
-                        if (nIdx >= 0 && nIdx < newTiles.length) {
-                            let nTile = newTiles[nIdx];
-                            let nVisTeams = Array.isArray(nTile.visibleTeams) ? [...nTile.visibleTeams] : [];
-                            if (!nVisTeams.includes(team.name)) nVisTeams.push(team.name);
-                            newTiles[nIdx] = { ...nTile, visibleTeams: nVisTeams };
-                        }
-                    });
-                });
-            } else {
-                // Classic unlock for all teams (rare, probably not used)
-                const completedIndices = newTiles
-                    .map((t, i) => t.completed ? i : null)
-                    .filter(i => i !== null);
-
-                completedIndices.forEach((i) => {
-                    const t = newTiles[i];
-                    const neighbors = getNeighborIndices(t, boardSize, neighborMode);
-                    neighbors.forEach(nIdx => {
-                        if (nIdx >= 0 && nIdx < newTiles.length && !newTiles[nIdx].visible) {
-                            newTiles[nIdx] = {
-                                ...newTiles[nIdx],
-                                visible: true,
-                            };
-                        }
-                    });
-                });
-            }
-        }
-        // --- SOLO MODE ---
-        else {
-            if (!tile.visible || tile.completed) return;
-
-            newTiles[tileIndex] = {
-                ...tile,
-                completed: true,
-            };
-
-            // Unlock all neighbors of all completed tiles globally
-            const completedIndices = newTiles
-                .map((t, i) => t.completed ? i : null)
-                .filter(i => i !== null);
-
-            completedIndices.forEach((i) => {
-                const t = newTiles[i];
-                const neighbors = getNeighborIndices(t, boardSize, neighborMode);
-                neighbors.forEach(nIdx => {
-                    if (nIdx >= 0 && nIdx < newTiles.length && !newTiles[nIdx].visible) {
-                        newTiles[nIdx] = {
-                            ...newTiles[nIdx],
-                            visible: true,
-                        };
-                    }
-                });
-            });
-        }
-
-        // --- SAVE TO FIRESTORE ---
-        try {
-            await updateDoc(doc(db, "bingoCards", cardId), {
-                tiles: newTiles,
-                lastUpdated: new Date().toISOString(),
-            });
-        } catch (error) {
-            setLoginError("Failed to claim tile.");
-        }
-    };
-
-    // --- Tiles for board (per-team visibility) ---
-    function getVisibleTiles() {
-        if (!cardData) return [];
-        // If this is a team board, use team logic (unchanged)
-        if (cardData.mode === "teams" || cardData.mode === "multi-claim") {
-            if (!team) return [];
-            const claimedByTeam = (tile) => {
-                const claimedBy = Array.isArray(tile.claimedBy)
-                    ? tile.claimedBy
-                    : tile.claimedBy
-                        ? [tile.claimedBy]
-                        : [];
-                return claimedBy.includes(team.name);
-            };
-            return cardData.tiles.map(tile => ({
-                ...tile,
-                completed: claimedByTeam(tile),
-                visible: Array.isArray(tile.visibleTeams)
-                    ? tile.visibleTeams.includes(team.name)
-                    : !!tile.visible
-            }));
-        }
-        // --- SOLO MODE: just use tile.visible and tile.completed ---
-        return cardData.tiles.map(tile => ({
-            ...tile,
-            completed: !!tile.completed,
-            visible: !!tile.visible
-        }));
-    }
-
-
-    // --- Team scores (only for team mode) ---
+    // --- Team scoring ---
     function getTeamScores() {
         if (!cardData || !isTeamMode) return [];
         return (cardData.teams || []).map((t) => {
@@ -365,7 +199,57 @@ export default function SharedBingoCard({ cardId }) {
         });
     }
 
-    // --- Captain: switch team logic ---
+    // --- Neighbor helpers (for unlock logic) ---
+    function getNeighborIndices(tile, boardSize, neighborMode = "8") {
+        const neighbors = [];
+        const { row, col } = tile;
+        for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+                if (dr === 0 && dc === 0) continue;
+                if (neighborMode === "4" && Math.abs(dr) + Math.abs(dc) !== 1) continue;
+                const nr = row + dr;
+                const nc = col + dc;
+                if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize) {
+                    neighbors.push(nr * boardSize + nc);
+                }
+            }
+        }
+        return neighbors;
+    }
+
+    // Returns eligible locked neighbors (for manual unlock) for THIS team
+    function getEligibleLockedNeighbors(tiles, boardSize, neighborMode, teamName) {
+        const completedIndices = tiles
+            .map((t, i) => {
+                if (isTeamMode) {
+                    const claimedBy = Array.isArray(t.claimedBy) ? t.claimedBy : t.claimedBy ? [t.claimedBy] : [];
+                    if (claimedBy.includes(teamName)) return i;
+                    return null;
+                } else {
+                    if (t.completed) return i;
+                    return null;
+                }
+            })
+            .filter(i => i !== null);
+
+        const lockedSet = new Set();
+        completedIndices.forEach(idx => {
+            const t = tiles[idx];
+            const neighbors = getNeighborIndices(t, boardSize, cardData.neighborMode || "8");
+            neighbors.forEach(nIdx => {
+                if (
+                    isTeamMode
+                        ? !(Array.isArray(tiles[nIdx].visibleTeams) && tiles[nIdx].visibleTeams.includes(teamName))
+                        : !tiles[nIdx].visible
+                ) {
+                    lockedSet.add(nIdx);
+                }
+            });
+        });
+        return Array.from(lockedSet);
+    }
+
+    // --- Team switch (captain only) ---
     const handleSwitchTeam = async () => {
         setSwitchError(null);
         if (!switchTeamName || !switchTeamPassword) {
@@ -390,10 +274,235 @@ export default function SharedBingoCard({ cardId }) {
         setSwitchError("Incorrect password.");
     };
 
-    const boardSize = cardData.gridSize || cardData.boardSize || 5;
-    const teams = cardData.teams || [];
-    const teamScores = getTeamScores();
-    const visibleTiles = getVisibleTiles();
+    // --- Claim tile logic (auto/manual) ---
+    const claimTile = async (tileIndex) => {
+        if (!cardData) return;
+
+        const newTiles = [...cardData.tiles];
+        const tile = newTiles[tileIndex];
+
+        if (isTeamMode) {
+            if (!team || role !== "captain") return;
+            // Only claim if visible for this team
+            let isVisible = true;
+            if (perTeamUnlocks) {
+                const visTeams = Array.isArray(tile.visibleTeams) ? tile.visibleTeams : [];
+                isVisible = visTeams.includes(team.name);
+            } else if (!tile.visible) {
+                isVisible = false;
+            }
+            if (!isVisible) return;
+
+            // Multi-claim: only block if this team already claimed
+            let claimedBy = Array.isArray(tile.claimedBy)
+                ? [...tile.claimedBy]
+                : tile.claimedBy
+                    ? [tile.claimedBy]
+                    : [];
+            let visibleTeams = Array.isArray(tile.visibleTeams)
+                ? [...tile.visibleTeams]
+                : tile.visibleTeams
+                    ? [tile.visibleTeams]
+                    : [];
+            if (claimedBy.includes(team.name)) return;
+            claimedBy.push(team.name);
+            if (!visibleTeams.includes(team.name)) visibleTeams.push(team.name);
+
+            newTiles[tileIndex] = {
+                ...tile,
+                claimedBy,
+                visibleTeams,
+                completed: true,
+            };
+
+            if (unlockMode === "manual") {
+                // MANUAL: prompt for neighbors to unlock for THIS team only
+                const eligible = getEligibleLockedNeighbors(newTiles, boardSize, cardData.neighborMode || "8", team?.name);
+                if (eligible.length === 0) {
+                    await confirmManualUnlocks([], tileIndex);
+                    return;
+                }
+                setPendingManualUnlocks({
+                    allowed: manualUnlockCount,
+                    eligible,
+                    selected: eligible.length < manualUnlockCount ? [...eligible] : []
+                });
+                setPendingClaimTileIndex(tileIndex);
+                return;
+            }
+
+            // AUTO unlock: neighbors become visible for THIS team only
+            if (perTeamUnlocks) {
+                const completedIndices = newTiles
+                    .map((t, i) => {
+                        const tClaimed = Array.isArray(t.claimedBy) ? t.claimedBy : t.claimedBy ? [t.claimedBy] : [];
+                        return tClaimed.includes(team?.name) ? i : null;
+                    })
+                    .filter(i => i !== null);
+
+                completedIndices.forEach((i) => {
+                    const t = newTiles[i];
+                    const neighbors = getNeighborIndices(t, boardSize, cardData.neighborMode || "8");
+                    neighbors.forEach(nIdx => {
+                        if (nIdx >= 0 && nIdx < newTiles.length) {
+                            let nTile = newTiles[nIdx];
+                            let nVisTeams = Array.isArray(nTile.visibleTeams) ? [...nTile.visibleTeams] : [];
+                            if (!nVisTeams.includes(team.name)) nVisTeams.push(team.name);
+                            newTiles[nIdx] = { ...nTile, visibleTeams: nVisTeams };
+                        }
+                    });
+                });
+            } else {
+                // Classic unlock for all teams (rare)
+                const completedIndices = newTiles
+                    .map((t, i) => t.completed ? i : null)
+                    .filter(i => i !== null);
+                completedIndices.forEach((i) => {
+                    const t = newTiles[i];
+                    const neighbors = getNeighborIndices(t, boardSize, cardData.neighborMode || "8");
+                    neighbors.forEach(nIdx => {
+                        if (nIdx >= 0 && nIdx < newTiles.length && !newTiles[nIdx].visible) {
+                            newTiles[nIdx] = {
+                                ...newTiles[nIdx],
+                                visible: true,
+                            };
+                        }
+                    });
+                });
+            }
+        } else {
+            // --- SOLO MODE ---
+            if (!tile.visible || tile.completed) return;
+            newTiles[tileIndex] = {
+                ...tile,
+                completed: true,
+            };
+
+            if (unlockMode === "manual") {
+                const eligible = getEligibleLockedNeighbors(newTiles, boardSize, cardData.neighborMode || "8", null);
+                if (eligible.length === 0) {
+                    await confirmManualUnlocks([], tileIndex);
+                    return;
+                }
+                setPendingManualUnlocks({
+                    allowed: manualUnlockCount,
+                    eligible,
+                    selected: eligible.length < manualUnlockCount ? [...eligible] : []
+                });
+                setPendingClaimTileIndex(tileIndex);
+                return;
+            }
+            // --- AUTO UNLOCK LOGIC ---
+            const completedIndices = newTiles
+                .map((t, i) => t.completed ? i : null)
+                .filter(i => i !== null);
+
+            completedIndices.forEach((i) => {
+                const t = newTiles[i];
+                const neighbors = getNeighborIndices(t, boardSize, cardData.neighborMode || "8");
+                neighbors.forEach(nIdx => {
+                    if (nIdx >= 0 && nIdx < newTiles.length && !newTiles[nIdx].visible) {
+                        newTiles[nIdx] = {
+                            ...newTiles[nIdx],
+                            visible: true,
+                        };
+                    }
+                });
+            });
+        }
+
+        try {
+            await updateDoc(doc(db, "bingoCards", cardId), {
+                tiles: newTiles,
+                lastUpdated: new Date().toISOString(),
+            });
+        } catch (error) {
+            setLoginError("Failed to claim tile.");
+        }
+    };
+
+    // --- Manual Unlock Selection Handler (for teams, only unlocks for this team) ---
+    async function confirmManualUnlocks(selected = null, claimTileIndex = null) {
+        const selectedIndices = selected !== null ? selected : (pendingManualUnlocks ? pendingManualUnlocks.selected : []);
+        const claimIdx = claimTileIndex !== null ? claimTileIndex : pendingClaimTileIndex;
+        const isTeam = isTeamMode;
+        const teamName = team?.name;
+        const newTiles = [...cardData.tiles];
+
+        // Mark the tile just claimed for this team
+        if (claimIdx !== null && newTiles[claimIdx]) {
+            if (isTeam) {
+                let t = newTiles[claimIdx];
+                let claimedBy = Array.isArray(t.claimedBy) ? [...t.claimedBy] : t.claimedBy ? [t.claimedBy] : [];
+                let visibleTeams = Array.isArray(t.visibleTeams) ? [...t.visibleTeams] : t.visibleTeams ? [t.visibleTeams] : [];
+                if (!claimedBy.includes(teamName)) claimedBy.push(teamName);
+                if (!visibleTeams.includes(teamName)) visibleTeams.push(teamName);
+                newTiles[claimIdx] = {
+                    ...t,
+                    claimedBy,
+                    visibleTeams,
+                    completed: true,
+                };
+            } else {
+                newTiles[claimIdx] = { ...newTiles[claimIdx], completed: true };
+            }
+        }
+
+        // Unlock chosen neighbors for THIS team only
+        selectedIndices.forEach(idx => {
+            if (isTeam) {
+                let nTile = newTiles[idx];
+                let nVisTeams = Array.isArray(nTile.visibleTeams) ? [...nTile.visibleTeams] : [];
+                if (!nVisTeams.includes(teamName)) nVisTeams.push(teamName);
+                newTiles[idx] = { ...nTile, visibleTeams: nVisTeams };
+            } else {
+                newTiles[idx] = { ...newTiles[idx], visible: true };
+            }
+        });
+
+        try {
+            await updateDoc(doc(db, "bingoCards", cardId), {
+                tiles: newTiles,
+                lastUpdated: new Date().toISOString(),
+            });
+        } catch (error) {
+            setLoginError("Failed to unlock tiles.");
+        }
+
+        setPendingManualUnlocks(null);
+        setPendingClaimTileIndex(null);
+    }
+
+    // --- Tiles for board (per-team visibility) ---
+    function getVisibleTiles() {
+        if (!cardData) return [];
+        if (cardData.mode === "teams" || cardData.mode === "multi-claim") {
+            if (!team) return [];
+            const claimedByTeam = (tile) => {
+                const claimedBy = Array.isArray(tile.claimedBy)
+                    ? tile.claimedBy
+                    : tile.claimedBy
+                        ? [tile.claimedBy]
+                        : [];
+                return claimedBy.includes(team.name);
+            };
+            return cardData.tiles.map((tile, idx) => ({
+                ...tile,
+                completed: claimedByTeam(tile),
+                visible: Array.isArray(tile.visibleTeams)
+                    ? tile.visibleTeams.includes(team.name)
+                    : !!tile.visible,
+                __index: idx
+            }));
+        }
+        // SOLO MODE
+        return cardData.tiles.map((tile, idx) => ({
+            ...tile,
+            completed: !!tile.completed,
+            visible: !!tile.visible,
+            __index: idx
+        }));
+    }
 
     // Helper: get all claimed teams for a tile (for badges/colors)
     const getClaimedTeams = (tile) => {
@@ -405,6 +514,33 @@ export default function SharedBingoCard({ cardId }) {
         return claimedBy.map((tn) => teams.find((t) => t.name === tn)).filter(Boolean);
     };
 
+    // Manual unlock: handle tile selection
+    const handleManualUnlockSelect = (idx) => {
+        if (!pendingManualUnlocks) return;
+        if (!pendingManualUnlocks.eligible.includes(idx)) return;
+        setPendingManualUnlocks(prev => {
+            const already = prev.selected.includes(idx);
+            let sel;
+            if (already) {
+                sel = prev.selected.filter(i => i !== idx);
+            } else if (prev.selected.length < prev.allowed) {
+                sel = [...prev.selected, idx];
+            } else {
+                sel = prev.selected;
+            }
+            return { ...prev, selected: sel };
+        });
+    };
+
+    // --- Manual unlock confirm logic ---
+    const canConfirmManualUnlocks =
+        !!pendingManualUnlocks &&
+        pendingManualUnlocks.selected.length === Math.min(
+            pendingManualUnlocks.allowed,
+            pendingManualUnlocks.eligible.length
+        );
+
+    // --- Render ---
     return (
         <motion.div
             className="min-h-screen flex flex-col md:flex-row p-0 md:p-4 gap-6 bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
@@ -412,12 +548,12 @@ export default function SharedBingoCard({ cardId }) {
             animate={{ opacity: 1 }}
         >
             <ThemeToggle />
-            {/* Team scores and task list: Only for team mode */}
+            {/* Team sidebar */}
             {isTeamMode && (
                 <aside className="w-full md:w-72 flex flex-col gap-4">
                     <h3 className="text-xl font-bold">Team Scores</h3>
                     <div className="flex flex-col gap-2">
-                        {teamScores.map((t) => (
+                        {getTeamScores().map((t) => (
                             <div
                                 key={t.name}
                                 className="flex items-center gap-2 p-2 rounded"
@@ -432,10 +568,10 @@ export default function SharedBingoCard({ cardId }) {
                         ))}
                     </div>
                     <h3 className="text-xl font-bold mt-4">
-                        Available Tasks ({visibleTiles.filter((t) => t.visible && !t.completed).length})
+                        Available Tasks ({getVisibleTiles().filter((t) => t.visible && !t.completed).length})
                     </h3>
                     <div className="flex flex-col gap-2 max-h-[70vh] overflow-auto pr-2">
-                        {visibleTiles
+                        {getVisibleTiles()
                             .filter((t) => t.visible && !t.completed)
                             .map((t, idx) => (
                                 <motion.div
@@ -492,7 +628,22 @@ export default function SharedBingoCard({ cardId }) {
                         <>Task Bingo Board</>
                     )}
                 </motion.h2>
-                {/* Captain switch team UI (only for team mode/captain) */}
+                {/* --- Tile size bar goes here --- */}
+                <div className="mb-4 w-full flex flex-row justify-center items-center">
+                    <label className="mr-2 font-semibold text-xs text-gray-700 dark:text-gray-400">
+                        Tile Size
+                    </label>
+                    <input
+                        type="range"
+                        min={40}
+                        max={120}
+                        value={tileSize}
+                        onChange={e => setTileSize(Number(e.target.value))}
+                        className="w-32"
+                    />
+                    <span className="ml-2 text-xs">{tileSize}px</span>
+                </div>
+                {/* Captain Switch Team Popup */}
                 {isTeamMode && role === "captain" && showSwitch && (
                     <div className="mb-4 p-4 bg-gray-200 dark:bg-gray-700 rounded shadow w-full max-w-xs flex flex-col gap-2">
                         <h3 className="font-bold text-lg">Switch Team (Captain)</h3>
@@ -538,32 +689,101 @@ export default function SharedBingoCard({ cardId }) {
                         {switchError && <p className="text-red-500">{switchError}</p>}
                     </div>
                 )}
+                {/* Manual unlock UI */}
+                {pendingManualUnlocks && (
+                    <div className="w-full max-w-md mx-auto mb-3">
+                        <div className="bg-yellow-100 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-100 rounded px-4 py-2 font-semibold text-center mb-2 shadow">
+                            Select {pendingManualUnlocks.allowed} tiles to unlock.
+                        </div>
+                        <div className="text-center mb-2">
+                            {pendingManualUnlocks.selected.length} / {Math.min(pendingManualUnlocks.allowed, pendingManualUnlocks.eligible.length)} selected
+                        </div>
+                        <div className="flex justify-center gap-4">
+                            <button
+                                className={`px-4 py-2 rounded bg-blue-600 text-white font-semibold transition-colors ${canConfirmManualUnlocks ? "hover:bg-blue-700" : "opacity-50 cursor-not-allowed"}`}
+                                disabled={!canConfirmManualUnlocks}
+                                onClick={() => confirmManualUnlocks()}
+                            >
+                                Confirm Unlocks
+                            </button>
+                            <button
+                                className="px-4 py-2 rounded bg-gray-400 hover:bg-gray-500 text-white font-semibold"
+                                onClick={() => {
+                                    setPendingManualUnlocks(null);
+                                    setPendingClaimTileIndex(null);
+                                }}
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                )}
+                {/* Bingo Grid */}
                 <div
                     className="grid gap-1"
                     style={{
-                        gridTemplateColumns: `repeat(${boardSize}, 64px)`,
+                        gridTemplateColumns: `repeat(${boardSize}, ${tileSize}px)`,
                         width: "fit-content",
                     }}
                 >
                     <AnimatePresence>
-                        {visibleTiles.map((tile, index) => (
-                            <div key={index} className="relative">
-                                <Tile
-                                    tile={tile}
-                                    onClick={() => {
-                                        // Team mode: only captains, solo: always
-                                        if (
-                                            (isTeamMode && role === "captain" && tile.visible && !tile.completed) ||
-                                            (!isTeamMode && tile.visible && !tile.completed)
-                                        ) {
-                                            claimTile(index);
-                                        }
-                                    }}
-                                    claimedTeams={isTeamMode ? getClaimedTeams(tile) : []}
-                                />
-                                {/* Team claim badges handled by Tile itself */}
-                            </div>
-                        ))}
+                        {getVisibleTiles().map((tile, index) => {
+                            let highlight = null;
+                            if (pendingManualUnlocks) {
+                                if (pendingManualUnlocks.eligible.includes(index)) {
+                                    if (pendingManualUnlocks.selected.includes(index)) {
+                                        highlight = "selected";
+                                    } else {
+                                        highlight = "eligible";
+                                    }
+                                }
+                            }
+                            const canUnlock = pendingManualUnlocks && highlight === "eligible";
+
+                            // --- Robust multiclaim, per-team logic ---
+                            const alreadyClaimedByTeam =
+                                isTeamMode && team
+                                    ? (Array.isArray(tile.claimedBy)
+                                        ? tile.claimedBy.includes(team.name)
+                                        : tile.claimedBy === team.name)
+                                    : false;
+
+                            const isClaimable =
+                                isTeamMode &&
+                                role === "captain" &&
+                                tile.visible &&
+                                !alreadyClaimedByTeam;
+
+                            return (
+                                <div key={tile.__index} className="relative">
+                                    <Tile
+                                        tile={tile}
+                                        onClick={() => {
+                                            if (
+                                                (isTeamMode && role === "captain" && tile.visible && !tile.completed) ||
+                                                (!isTeamMode && tile.visible && !tile.completed)
+                                            ) {
+                                                claimTile(tile.__index);
+                                            }
+                                        }}
+                                        claimedTeams={isTeamMode ? getClaimedTeams(tile) : []}
+                                        currentTeam={isTeamMode ? team : null}
+                                    />
+                                    {highlight === "eligible" && (
+                                        <span
+                                            className="absolute inset-0 rounded-lg border-4 border-yellow-400 pointer-events-none"
+                                            style={{ zIndex: 10 }}
+                                        />
+                                    )}
+                                    {highlight === "selected" && (
+                                        <span
+                                            className="absolute inset-0 rounded-lg border-4 border-blue-500 pointer-events-none"
+                                            style={{ zIndex: 10 }}
+                                        />
+                                    )}
+                                </div>
+                            );
+                        })}
                     </AnimatePresence>
                 </div>
             </div>

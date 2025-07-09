@@ -6,6 +6,7 @@ import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import { hashString } from "../utils/crypto";
 import ThemeToggle from "../components/ThemeToggle";
+import { FaEye, FaEyeSlash } from "react-icons/fa";
 
 // Default team colors
 const TEAM_COLORS = [
@@ -39,11 +40,19 @@ export default function Home({ tasksPool, setTasksPool }) {
     const [neighborMode, setNeighborMode] = useState("8");
     const [boardPassword, setBoardPassword] = useState("");
     const [perTeamUnlocks, setPerTeamUnlocks] = useState(true); // NEW
+    const [firstClaimBonus, setFirstClaimBonus] = useState(1); // default +1
+    const [manualUnlockCount, setManualUnlockCount] = useState(2);
+
 
     // Teams state
     const [teams, setTeams] = useState([
         { name: "Red", color: TEAM_COLORS[0], password: "", memberPassword: "" },
         { name: "Blue", color: TEAM_COLORS[1], password: "", memberPassword: "" },
+    ]);
+    // Password vis state for each team
+    const [passwordVis, setPasswordVis] = useState([
+        { captain: false, member: false },
+        { captain: false, member: false }
     ]);
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -59,9 +68,11 @@ export default function Home({ tasksPool, setTasksPool }) {
                 memberPassword: "",
             },
         ]);
+        setPasswordVis((prev) => [...prev, { captain: false, member: false }]);
     };
     const removeTeam = (idx) => {
         setTeams((prev) => prev.filter((_, i) => i !== idx));
+        setPasswordVis((prev) => prev.filter((_, i) => i !== idx));
     };
     const handleTeamChange = (idx, field, value) => {
         setTeams((prev) =>
@@ -96,6 +107,12 @@ export default function Home({ tasksPool, setTasksPool }) {
             for (const team of teams) {
                 if (!team.name.trim() || !team.password.trim() || !team.memberPassword.trim()) {
                     setError("Each team needs a name and both passwords.");
+                    setLoading(false);
+                    return;
+                }
+                // Prevent captain and member passwords from being identical
+                if (team.password.trim() === team.memberPassword.trim()) {
+                    setError(`Captain and Team Member passwords must be different for team "${team.name || '(unnamed)'}".`);
                     setLoading(false);
                     return;
                 }
@@ -170,6 +187,7 @@ export default function Home({ tasksPool, setTasksPool }) {
             boardSize,
             gridSize: boardSize,
             unlockMode,
+            manualUnlockCount: unlockMode === "manual" ? manualUnlockCount : null,
             neighborMode,
             difficultyMode,
             teams: boardType === "team" ? teamsWithHash : [],
@@ -177,7 +195,10 @@ export default function Home({ tasksPool, setTasksPool }) {
             score: 0,
             lastUpdated: new Date().toISOString(),
             createdAt: serverTimestamp(),
-            perTeamUnlocks: boardType === "team" ? perTeamUnlocks : false, // NEW
+            perTeamUnlocks: boardType === "team" ? perTeamUnlocks : false,
+            firstClaimBonus: boardType === "team" ? firstClaimBonus : 0,
+
+
         };
 
         try {
@@ -241,6 +262,20 @@ export default function Home({ tasksPool, setTasksPool }) {
                             <option value="manual">Manual: pick one tile to unlock after claim</option>
                         </select>
                     </label>
+                    {unlockMode === "manual" && (
+                        <label className="flex flex-col gap-1">
+                            <span className="font-medium">Manual Unlocks per Completion:</span>
+                            <input
+                                type="number"
+                                min={1}
+                                max={8}
+                                value={manualUnlockCount}
+                                onChange={e => setManualUnlockCount(Math.max(1, Math.min(8, Number(e.target.value) || 2)))}
+                                className="p-2 border rounded bg-white text-black dark:bg-gray-800 dark:text-white w-24"
+                            />
+                            <span className="text-xs text-gray-500">How many tiles to unlock after completing a tile (default 2)</span>
+                        </label>
+                    )}
                     <label className="flex flex-col gap-1">
                         <span className="font-medium">Neighbor Mode for Unlock:</span>
                         <select
@@ -277,6 +312,21 @@ export default function Home({ tasksPool, setTasksPool }) {
                             </span>
                         </label>
                     )}
+                    {boardType === "team" && (
+                        <label className="flex items-center gap-2 mt-2">
+                            <span className="font-medium">First Claim Bonus:</span>
+                            <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                step={1}
+                                value={firstClaimBonus}
+                                onChange={e => setFirstClaimBonus(Number(e.target.value))}
+                                className="p-2 border rounded bg-white text-black dark:bg-gray-800 dark:text-white w-20"
+                            />
+                            <span className="text-sm">points for first team to claim a tile (default 1)</span>
+                        </label>
+                    )}
                 </div>
                 {boardType === "team" && (
                     <div>
@@ -292,7 +342,7 @@ export default function Home({ tasksPool, setTasksPool }) {
                                     placeholder="Team Name"
                                     value={team.name}
                                     onChange={e => handleTeamChange(idx, "name", e.target.value)}
-                                    className="flex-1 p-2 border rounded"
+                                    className="flex-1 p-2 border rounded bg-white text-black dark:bg-gray-800 dark:text-white"
                                 />
                                 <input
                                     type="color"
@@ -302,20 +352,54 @@ export default function Home({ tasksPool, setTasksPool }) {
                                     style={{ background: team.color }}
                                     title="Team color"
                                 />
-                                <input
-                                    type="password"
-                                    placeholder="Captain Password"
-                                    value={team.password}
-                                    onChange={e => handleTeamChange(idx, "password", e.target.value)}
-                                    className="flex-1 p-2 border rounded"
-                                />
-                                <input
-                                    type="password"
-                                    placeholder="Team Member Password"
-                                    value={team.memberPassword}
-                                    onChange={e => handleTeamChange(idx, "memberPassword", e.target.value)}
-                                    className="flex-1 p-2 border rounded"
-                                />
+                                <div className="relative flex-1">
+                                    <input
+                                        type={passwordVis[idx]?.captain ? "text" : "password"}
+                                        placeholder="Captain Password"
+                                        value={team.password}
+                                        onChange={e => handleTeamChange(idx, "password", e.target.value)}
+                                        className="w-full p-2 border rounded bg-white text-black dark:bg-gray-800 dark:text-white pr-10"
+                                    />
+                                    <button
+                                        type="button"
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-300"
+                                        tabIndex={-1}
+                                        onClick={() =>
+                                            setPasswordVis((prev) =>
+                                                prev.map((vis, i) =>
+                                                    i === idx ? { ...vis, captain: !vis.captain } : vis
+                                                )
+                                            )
+                                        }
+                                        aria-label={passwordVis[idx]?.captain ? "Hide password" : "Show password"}
+                                    >
+                                        {passwordVis[idx]?.captain ? <FaEyeSlash /> : <FaEye />}
+                                    </button>
+                                </div>
+                                <div className="relative flex-1">
+                                    <input
+                                        type={passwordVis[idx]?.member ? "text" : "password"}
+                                        placeholder="Team Member Password"
+                                        value={team.memberPassword}
+                                        onChange={e => handleTeamChange(idx, "memberPassword", e.target.value)}
+                                        className="w-full p-2 border rounded bg-white text-black dark:bg-gray-800 dark:text-white pr-10"
+                                    />
+                                    <button
+                                        type="button"
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-300"
+                                        tabIndex={-1}
+                                        onClick={() =>
+                                            setPasswordVis((prev) =>
+                                                prev.map((vis, i) =>
+                                                    i === idx ? { ...vis, member: !vis.member } : vis
+                                                )
+                                            )
+                                        }
+                                        aria-label={passwordVis[idx]?.member ? "Hide password" : "Show password"}
+                                    >
+                                        {passwordVis[idx]?.member ? <FaEyeSlash /> : <FaEye />}
+                                    </button>
+                                </div>
                                 {teams.length > 2 && (
                                     <button
                                         type="button"

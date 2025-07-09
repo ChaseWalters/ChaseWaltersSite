@@ -7,9 +7,38 @@ const tileVariants = {
     visible: { opacity: 1, scale: 1 },
 };
 
-const TILE_SIZE = 64; // px, match grid column sizing in SharedBingoCard
+const Tile = ({ tile, onClick, claimedTeams = [], canUnlock = false, tileSize = 64, currentTeam }) => {
+    // 1. Manual unlock: eligible hidden tile
+    if (!tile.visible && canUnlock) {
+        return (
+            <motion.button
+                variants={tileVariants}
+                initial="hidden"
+                animate="visible"
+                exit="hidden"
+                transition={{ duration: 0.2 }}
+                whileTap={{ scale: 0.92 }}
+                onClick={() => onClick(tile)}
+                className="relative rounded-lg border-4 border-yellow-400 bg-yellow-50 flex items-center justify-center text-center select-none shadow font-bold text-yellow-800"
+                style={{
+                    width: tileSize,
+                    height: tileSize,
+                    minWidth: tileSize,
+                    minHeight: tileSize,
+                    maxWidth: tileSize,
+                    maxHeight: tileSize,
+                    aspectRatio: "1 / 1",
+                    fontSize: "2rem",
+                    cursor: "pointer",
+                }}
+                aria-label="Unlock this tile"
+            >
+                ?
+            </motion.button>
+        );
+    }
 
-const Tile = ({ tile, onClick, claimedTeams = [] }) => {
+    // 2. Standard hidden tile (not unlockable)
     if (!tile.visible) {
         return (
             <motion.div
@@ -17,15 +46,26 @@ const Tile = ({ tile, onClick, claimedTeams = [] }) => {
                 initial={{ opacity: 1 }}
                 animate={{ opacity: 1 }}
                 style={{
-                    width: TILE_SIZE,
-                    height: TILE_SIZE,
-                    minWidth: TILE_SIZE,
-                    minHeight: TILE_SIZE,
-                    maxWidth: TILE_SIZE,
-                    maxHeight: TILE_SIZE,
+                    width: tileSize,
+                    height: tileSize,
+                    minWidth: tileSize,
+                    minHeight: tileSize,
+                    maxWidth: tileSize,
+                    maxHeight: tileSize,
                 }}
+                aria-label="Hidden tile"
             />
         );
+    }
+
+    // 3. Visible tile (can show task, badges, etc)
+    // Find if our team claimed it, for color
+    let ourColor = undefined;
+    if (currentTeam && Array.isArray(tile.claimedBy) && tile.claimedBy.includes(currentTeam.name)) {
+        ourColor = currentTeam.color;
+    }
+    if (currentTeam && tile.claimedBy === currentTeam.name) {
+        ourColor = currentTeam.color;
     }
 
     return (
@@ -37,21 +77,26 @@ const Tile = ({ tile, onClick, claimedTeams = [] }) => {
             transition={{ duration: 0.25 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => onClick(tile)}
-            disabled={tile.completed}
+            disabled={tile.completed && !canUnlock}
             className={`relative rounded-lg border overflow-hidden flex items-center justify-center text-center select-none transition-colors duration-150
                 ${tile.completed
-                    ? "bg-green-500 text-white border-green-600"
+                    ? ourColor
+                        ? ""
+                        : "bg-green-500 text-white border-green-600"
                     : "bg-white text-black hover:bg-blue-50 border-gray-300"
                 }`}
             style={{
-                width: TILE_SIZE,
-                height: TILE_SIZE,
-                minWidth: TILE_SIZE,
-                minHeight: TILE_SIZE,
-                maxWidth: TILE_SIZE,
-                maxHeight: TILE_SIZE,
+                width: tileSize,
+                height: tileSize,
+                minWidth: tileSize,
+                minHeight: tileSize,
+                maxWidth: tileSize,
+                maxHeight: tileSize,
                 aspectRatio: "1 / 1",
                 padding: 2,
+                background: tile.completed && ourColor ? ourColor : undefined,
+                color: tile.completed && ourColor ? "#fff" : undefined,
+                borderColor: tile.completed && ourColor ? ourColor : undefined,
             }}
         >
             <span className="block w-full overflow-hidden text-[0.6rem] md:text-xs leading-tight line-clamp-3 break-words px-1">
@@ -60,7 +105,7 @@ const Tile = ({ tile, onClick, claimedTeams = [] }) => {
             {/* Checkmark overlay for completed */}
             {tile.completed && (
                 <svg
-                    className="absolute top-1 right-1 w-4 h-4 text-white opacity-70 pointer-events-none"
+                    className="absolute top-1 right-1 w-4 h-4 text-white opacity-80 pointer-events-none"
                     fill="currentColor"
                     viewBox="0 0 20 20"
                 >
@@ -71,7 +116,7 @@ const Tile = ({ tile, onClick, claimedTeams = [] }) => {
                     />
                 </svg>
             )}
-            {/* Claimed team badges (if any), absolutely positioned at bottom (do NOT affect layout) */}
+            {/* Claimed team badges (if any) */}
             {claimedTeams.length > 0 && (
                 <div className="absolute bottom-1 left-1 flex gap-1 flex-wrap z-10">
                     {claimedTeams.map((ct, i) => (
