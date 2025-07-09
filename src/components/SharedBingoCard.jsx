@@ -727,11 +727,14 @@ export default function SharedBingoCard({ cardId }) {
                     }}
                 >
                     <AnimatePresence>
-                        {getVisibleTiles().map((tile, index) => {
+                        {getVisibleTiles().map((tile) => {
+                            const realIdx = tile.__index;
+
+                            // Manual unlock logic: highlights & click
                             let highlight = null;
                             if (pendingManualUnlocks) {
-                                if (pendingManualUnlocks.eligible.includes(index)) {
-                                    if (pendingManualUnlocks.selected.includes(index)) {
+                                if (pendingManualUnlocks.eligible.includes(realIdx)) {
+                                    if (pendingManualUnlocks.selected.includes(realIdx)) {
                                         highlight = "selected";
                                     } else {
                                         highlight = "eligible";
@@ -740,7 +743,7 @@ export default function SharedBingoCard({ cardId }) {
                             }
                             const canUnlock = pendingManualUnlocks && highlight === "eligible";
 
-                            // --- Robust multiclaim, per-team logic ---
+                            // Multi-claim logic
                             const alreadyClaimedByTeam =
                                 isTeamMode && team
                                     ? (Array.isArray(tile.claimedBy)
@@ -748,24 +751,32 @@ export default function SharedBingoCard({ cardId }) {
                                         : tile.claimedBy === team.name)
                                     : false;
 
+                            // Claim logic
                             const isClaimable =
-                                isTeamMode &&
-                                role === "captain" &&
-                                tile.visible &&
-                                !alreadyClaimedByTeam;
+                                (isTeamMode &&
+                                    role === "captain" &&
+                                    tile.visible &&
+                                    !alreadyClaimedByTeam) ||
+                                (!isTeamMode && tile.visible && !tile.completed);
+
+                            // Unified click handler
+                            const handleTileClick = () => {
+                                if (pendingManualUnlocks) {
+                                    if (highlight === "eligible") {
+                                        handleManualUnlockSelect(realIdx);
+                                    }
+                                } else if (isClaimable) {
+                                    claimTile(realIdx);
+                                }
+                            };
 
                             return (
-                                <div key={tile.__index} className="relative">
+                                <div key={realIdx} className="relative">
                                     <Tile
                                         tile={tile}
-                                        onClick={() => {
-                                            if (
-                                                (isTeamMode && role === "captain" && tile.visible && !tile.completed) ||
-                                                (!isTeamMode && tile.visible && !tile.completed)
-                                            ) {
-                                                claimTile(tile.__index);
-                                            }
-                                        }}
+                                        tileSize={tileSize}
+                                        onClick={handleTileClick}
+                                        canUnlock={canUnlock}
                                         claimedTeams={isTeamMode ? getClaimedTeams(tile) : []}
                                         currentTeam={isTeamMode ? team : null}
                                     />
