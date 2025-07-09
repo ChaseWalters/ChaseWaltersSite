@@ -42,6 +42,9 @@ export default function Home({ tasksPool, setTasksPool }) {
     const [perTeamUnlocks, setPerTeamUnlocks] = useState(true); // NEW
     const [firstClaimBonus, setFirstClaimBonus] = useState(1); // default +1
     const [manualUnlockCount, setManualUnlockCount] = useState(2);
+    const [enableMines, setEnableMines] = useState(false);
+    const [mineCount, setMineCount] = useState(3);
+    const [mineDamage, setMineDamage] = useState(10);
 
 
     // Teams state
@@ -177,6 +180,18 @@ export default function Home({ tasksPool, setTasksPool }) {
             }
         }
 
+        if (unlockMode === "manual" && enableMines && mineCount > 0) {
+            // Don't allow mine on center tile
+            const center = Math.floor(boardSize / 2);
+            const validIndices = tiles
+                .map((tile, idx) => (tile.row !== center || tile.col !== center ? idx : null))
+                .filter(idx => idx !== null);
+            const shuffled = shuffle(validIndices);
+            for (let i = 0; i < Math.min(mineCount, shuffled.length); i++) {
+                tiles[shuffled[i]].isMine = true;
+            }
+        }
+
         // Board doc
         const boardId = Math.random().toString(36).substr(2, 9);
         const boardPasswordHash = await hashString(boardPassword.trim());
@@ -188,6 +203,8 @@ export default function Home({ tasksPool, setTasksPool }) {
             gridSize: boardSize,
             unlockMode,
             manualUnlockCount: unlockMode === "manual" ? manualUnlockCount : null,
+            mineCount: enableMines ? mineCount : 0,
+            mineDamage: enableMines ? mineDamage : 0,
             neighborMode,
             difficultyMode,
             teams: boardType === "team" ? teamsWithHash : [],
@@ -263,18 +280,59 @@ export default function Home({ tasksPool, setTasksPool }) {
                         </select>
                     </label>
                     {unlockMode === "manual" && (
-                        <label className="flex flex-col gap-1">
-                            <span className="font-medium">Manual Unlocks per Completion:</span>
-                            <input
-                                type="number"
-                                min={1}
-                                max={8}
-                                value={manualUnlockCount}
-                                onChange={e => setManualUnlockCount(Math.max(1, Math.min(8, Number(e.target.value) || 2)))}
-                                className="p-2 border rounded bg-white text-black dark:bg-gray-800 dark:text-white w-24"
-                            />
-                            <span className="text-xs text-gray-500">How many tiles to unlock after completing a tile (default 2)</span>
-                        </label>
+                        <>
+                            <label className="flex flex-col gap-1">
+                                <span className="font-medium">Manual Unlocks per Completion:</span>
+                                <input
+                                    type="number"
+                                    min={1}
+                                    max={8}
+                                    value={manualUnlockCount}
+                                    onChange={e => setManualUnlockCount(Math.max(1, Math.min(8, Number(e.target.value) || 2)))}
+                                    className="p-2 border rounded bg-white text-black dark:bg-gray-800 dark:text-white w-24"
+                                />
+                                <span className="text-xs text-gray-500">How many tiles to unlock after completing a tile (default 2)</span>
+                            </label>
+                            {/* --- MINES FEATURE --- */}
+                            <label className="flex items-center gap-2 mt-2">
+                                <input
+                                    type="checkbox"
+                                    checked={enableMines}
+                                    onChange={e => setEnableMines(e.target.checked)}
+                                />
+                                <span className="font-medium">Enable Mines (bombs)</span>
+                            </label>
+                            {enableMines && (
+                                <div className="flex flex-col gap-2 pl-6">
+                                    <label>
+                                        <span className="font-medium">Number of Mines:</span>
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            max={boardSize * boardSize - 1}
+                                            value={mineCount}
+                                            onChange={e =>
+                                                setMineCount(Math.max(1, Math.min(boardSize * boardSize - 1, Number(e.target.value) || 1)))
+                                            }
+                                            className="p-2 border rounded bg-white text-black dark:bg-gray-800 dark:text-white w-24"
+                                        />
+                                    </label>
+                                    <label>
+                                        <span className="font-medium">Bomb Damage (points lost):</span>
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            max={100}
+                                            value={mineDamage}
+                                            onChange={e =>
+                                                setMineDamage(Math.max(1, Math.min(100, Number(e.target.value) || 10)))
+                                            }
+                                            className="p-2 border rounded bg-white text-black dark:bg-gray-800 dark:text-white w-24"
+                                        />
+                                    </label>
+                                </div>
+                            )}
+                        </>
                     )}
                     <label className="flex flex-col gap-1">
                         <span className="font-medium">Neighbor Mode for Unlock:</span>
