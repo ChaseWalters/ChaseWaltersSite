@@ -1,4 +1,4 @@
-/* eslint-disable no-unused-vars */
+﻿/* eslint-disable no-unused-vars */
 // src/components/SharedBingoCard.jsx
 import React, { useEffect, useState } from "react";
 import { doc, onSnapshot, updateDoc } from "firebase/firestore";
@@ -32,6 +32,13 @@ export default function SharedBingoCard({ cardId }) {
 
     // Tile scaling
     const [tileSize, setTileSize] = useState(64);
+
+    // MINES: Animation and penalty tracking
+    const [recentMines, setRecentMines] = useState([]);
+    const [minePenalty, setMinePenalty] = useState(0);
+
+    // --- For solo mode point tracking (not persisted) ---
+    const [soloScorePenalty, setSoloScorePenalty] = useState(0);
 
     useEffect(() => {
         const cardRef = doc(db, "bingoCards", cardId);
@@ -71,7 +78,8 @@ export default function SharedBingoCard({ cardId }) {
     const unlockMode = cardData?.unlockMode || "auto";
     const boardSize = cardData.gridSize || cardData.boardSize || 5;
     const teams = cardData.teams || [];
-
+    const mineCount = cardData.mineCount || 0;
+    const mineDamage = cardData.mineDamage || 0;
 
     // --- Login/Password UI ---
     if (isSoloMode && !soloAccess) {
@@ -195,6 +203,7 @@ export default function SharedBingoCard({ cardId }) {
                 return claimedBy.includes(t.name);
             });
             const score = claimed.reduce((sum, tile) => sum + (tile.task?.value || 1), 0);
+            // Subtract mine penalties (optional: you can persist penalties in the future)
             return { ...t, score };
         });
     }
@@ -429,6 +438,27 @@ export default function SharedBingoCard({ cardId }) {
         const teamName = team?.name;
         const newTiles = [...cardData.tiles];
 
+        // --- MINE LOGIC ---
+        const mineDamage = cardData.mineDamage || 0;
+        let minesHit = [];
+        selectedIndices.forEach(idx => {
+            if (newTiles[idx]?.isMine) minesHit.push(idx);
+        });
+
+        // Deduct mineDamage per mine hit, and show animation
+        if (minesHit.length > 0) {
+            setRecentMines(minesHit);
+            setMinePenalty(mineDamage * minesHit.length);
+            setTimeout(() => setRecentMines([]), 1600);
+            setTimeout(() => setMinePenalty(0), 1800);
+
+            // --- Optional: For teams, you'd update score in DB if you persist penalties. ---
+            // For solo, just show a penalty notification.
+            if (!isTeam) {
+                setSoloScorePenalty((prev) => prev + mineDamage * minesHit.length);
+            }
+        }
+
         // Mark the tile just claimed for this team
         if (claimIdx !== null && newTiles[claimIdx]) {
             if (isTeam) {
@@ -459,6 +489,27 @@ export default function SharedBingoCard({ cardId }) {
                 newTiles[idx] = { ...newTiles[idx], visible: true };
             }
         });
+
+        // --- Allow extra unlock per mine triggered ---
+        let extraAllowed = 0;
+        if (minesHit.length > 0) {
+            extraAllowed = minesHit.length;
+        }
+        if (extraAllowed > 0) {
+            // Find all remaining eligible locked neighbors
+            const eligible = getEligibleLockedNeighbors(newTiles, boardSize, cardData.neighborMode || "8", isTeam ? teamName : null);
+            // Remove any already selected or just unlocked
+            const newEligible = eligible.filter(idx => !selectedIndices.includes(idx));
+            if (newEligible.length > 0) {
+                setPendingManualUnlocks({
+                    allowed: extraAllowed,
+                    eligible: newEligible,
+                    selected: [],
+                });
+                // Don't clear pendingClaimTileIndex yet!
+                return;
+            }
+        }
 
         try {
             await updateDoc(doc(db, "bingoCards", cardId), {
@@ -596,6 +647,13 @@ export default function SharedBingoCard({ cardId }) {
                                 </motion.div>
                             ))}
                     </div>
+                    {/* --- Mines Info --- */}
+                    {mineCount > 0 && unlockMode === "manual" && (
+                        <div className="mt-4 bg-yellow-50 dark:bg-yellow-900 text-yellow-900 dark:text-yellow-100 rounded px-4 py-2 font-semibold shadow">
+                            <span role="img" aria-label="mine">💣</span> Mines on board: <b>{mineCount}</b><br />
+                            Bomb damage: <b>{mineDamage}</b> points
+                        </div>
+                    )}
                 </aside>
             )}
             <div className="flex-1 flex flex-col items-center">
@@ -693,7 +751,12 @@ export default function SharedBingoCard({ cardId }) {
                 {pendingManualUnlocks && (
                     <div className="w-full max-w-md mx-auto mb-3">
                         <div className="bg-yellow-100 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-100 rounded px-4 py-2 font-semibold text-center mb-2 shadow">
-                            Select {pendingManualUnlocks.allowed} tiles to unlock.
+                            Select {pendingManualUnlocks.allowed} tiles to unlock.<br />
+                            {mineCount > 0 && (
+                                <span className="text-xs text-yellow-900 dark:text-yellow-100">
+                                    Beware: mines may be hidden on this board!
+                                </span>
+                            )}
                         </div>
                         <div className="text-center mb-2">
                             {pendingManualUnlocks.selected.length} / {Math.min(pendingManualUnlocks.allowed, pendingManualUnlocks.eligible.length)} selected
@@ -716,6 +779,14 @@ export default function SharedBingoCard({ cardId }) {
                                 Cancel
                             </button>
                         </div>
+                    </div>
+                )}
+                {/* Penalty Notification */}
+                {(minePenalty > 0) && (
+                    <div className="mb-3 text-center">
+                        <span className="inline-block px-4 py-2 bg-red-700 text-white rounded-lg font-bold text-lg shadow-lg animate-pulse">
+                            💥 -{minePenalty} points!
+                        </span>
                     </div>
                 )}
                 {/* Bingo Grid */}
@@ -770,6 +841,9 @@ export default function SharedBingoCard({ cardId }) {
                                 }
                             };
 
+                            // Show mine animation if detonated
+                            const showMine = recentMines.includes(realIdx);
+
                             return (
                                 <div key={realIdx} className="relative">
                                     <Tile
@@ -791,6 +865,14 @@ export default function SharedBingoCard({ cardId }) {
                                             className="absolute inset-0 rounded-lg border-4 border-blue-500 pointer-events-none"
                                             style={{ zIndex: 10 }}
                                         />
+                                    )}
+                                    {showMine && (
+                                        <span
+                                            className="absolute inset-0 flex items-center justify-center pointer-events-none animate-bounce"
+                                            style={{ zIndex: 30, background: "rgba(255,255,255,0.7)" }}
+                                        >
+                                            <span style={{ fontSize: "2.5em" }} role="img" aria-label="Boom">💣</span>
+                                        </span>
                                     )}
                                 </div>
                             );
