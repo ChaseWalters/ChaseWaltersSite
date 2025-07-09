@@ -20,6 +20,22 @@ const shuffle = (arr) => {
     return copy;
 };
 
+// Helper: get all 8-neighbor coordinates for a tile
+const getNeighborCoords = (row, col, boardSize) => {
+    const neighbors = [];
+    for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+            if (dr === 0 && dc === 0) continue;
+            const nr = row + dr;
+            const nc = col + dc;
+            if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize) {
+                neighbors.push([nr, nc]);
+            }
+        }
+    }
+    return neighbors;
+};
+
 export default function TaskBingo({ tasksPool, setTasksPool }) {
     const [configDone, setConfigDone] = useState(false);
     const [boardSize, setBoardSize] = useState(9);
@@ -98,27 +114,28 @@ export default function TaskBingo({ tasksPool, setTasksPool }) {
         setConfigDone(true);
     };
 
-    const neighbours = (r, c) => {
-        const coords = [];
-        for (let dr = -1; dr <= 1; dr++) {
-            for (let dc = -1; dc <= 1; dc++) {
-                if (dr === 0 && dc === 0) continue;
-                const nr = r + dr,
-                    nc = c + dc;
-                if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize) coords.push([nr, nc]);
-            }
-        }
-        return coords;
-    };
-
+    // UNLOCK LOGIC: when a tile is completed, unlock ALL neighbors of ALL completed tiles
     const handleTileClick = (tile) => {
         if (!tile.visible || tile.completed) return;
         setBoard((prev) => {
+            // Deep copy board
             const copy = prev.map((row) => row.map((t) => ({ ...t })));
+            // Mark this tile as completed
             const t = copy[tile.row][tile.col];
             t.completed = true;
-            neighbours(tile.row, tile.col).forEach(([nr, nc]) => {
-                if (!copy[nr][nc].visible) copy[nr][nc].visible = true;
+
+            // Gather all completed tile coords
+            const completedCoords = [];
+            for (let r = 0; r < boardSize; r++) {
+                for (let c = 0; c < boardSize; c++) {
+                    if (copy[r][c].completed) completedCoords.push([r, c]);
+                }
+            }
+            // For each completed tile, unlock all its neighbors
+            completedCoords.forEach(([r, c]) => {
+                getNeighborCoords(r, c, boardSize).forEach(([nr, nc]) => {
+                    if (!copy[nr][nc].visible) copy[nr][nc].visible = true;
+                });
             });
             return copy;
         });
@@ -170,7 +187,6 @@ export default function TaskBingo({ tasksPool, setTasksPool }) {
     // --- Rendering ---
 
     if (!configDone) {
-        console.log("Rendering configuration screen");
         return (
             <motion.div
                 className="min-h-screen flex flex-col items-center justify-center p-4 gap-6 bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
@@ -229,7 +245,6 @@ export default function TaskBingo({ tasksPool, setTasksPool }) {
     }
 
     // Game screen: Local board view
-    console.log("Rendering bingo card view");
     return (
         <motion.div
             className="min-h-screen flex flex-col md:flex-row p-4 gap-6 bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
