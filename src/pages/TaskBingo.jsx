@@ -20,12 +20,14 @@ const shuffle = (arr) => {
     return copy;
 };
 
-// Helper: get all 8-neighbor coordinates for a tile
-const getNeighborCoords = (row, col, boardSize) => {
+// Helper: get all neighbor coordinates for a tile
+const getNeighborCoords = (row, col, boardSize, neighborMode = "8") => {
     const neighbors = [];
     for (let dr = -1; dr <= 1; dr++) {
         for (let dc = -1; dc <= 1; dc++) {
             if (dr === 0 && dc === 0) continue;
+            if (neighborMode === "4" && Math.abs(dr) + Math.abs(dc) !== 1)
+                continue;
             const nr = row + dr;
             const nc = col + dc;
             if (nr >= 0 && nr < boardSize && nc >= 0 && nc < boardSize) {
@@ -42,8 +44,11 @@ export default function TaskBingo({ tasksPool, setTasksPool }) {
     const [difficultyMode, setDifficultyMode] = useState("distance");
     const [board, setBoard] = useState([]);
     const [score, setScore] = useState(0);
-    const [sortField, setSortField] = useState("difficulty");
-    const [sortDir, setSortDir] = useState("asc");
+    const [unlockMode, setUnlockMode] = useState("auto"); // "auto" or "manual"
+    const [neighborMode, setNeighborMode] = useState("8"); // "4" or "8"
+    const [awaitingUnlock, setAwaitingUnlock] = useState(false);
+    const [unlockableTiles, setUnlockableTiles] = useState([]);
+    const [lastCompleted, setLastCompleted] = useState(null);
 
     const navigate = useNavigate();
 
@@ -112,34 +117,95 @@ export default function TaskBingo({ tasksPool, setTasksPool }) {
         setBoard(newBoard);
         setScore(0);
         setConfigDone(true);
+        setAwaitingUnlock(false);
+        setUnlockableTiles([]);
+        setLastCompleted(null);
     };
 
-    // UNLOCK LOGIC: when a tile is completed, unlock ALL neighbors of ALL completed tiles
-    const handleTileClick = (tile) => {
-        if (!tile.visible || tile.completed) return;
-        setBoard((prev) => {
-            // Deep copy board
-            const copy = prev.map((row) => row.map((t) => ({ ...t })));
-            // Mark this tile as completed
-            const t = copy[tile.row][tile.col];
-            t.completed = true;
-
-            // Gather all completed tile coords
-            const completedCoords = [];
-            for (let r = 0; r < boardSize; r++) {
-                for (let c = 0; c < boardSize; c++) {
-                    if (copy[r][c].completed) completedCoords.push([r, c]);
-                }
+    // Helper to gather all completed tile coords
+    const getCompletedCoords = (board) => {
+        const coords = [];
+        for (let r = 0; r < boardSize; r++) {
+            for (let c = 0; c < boardSize; c++) {
+                if (board[r][c].completed) coords.push([r, c]);
             }
-            // For each completed tile, unlock all its neighbors
-            completedCoords.forEach(([r, c]) => {
-                getNeighborCoords(r, c, boardSize).forEach(([nr, nc]) => {
-                    if (!copy[nr][nc].visible) copy[nr][nc].visible = true;
-                });
+        }
+        return coords;
+    };
+
+    // Helper to get all locked neighbors of all completed tiles
+    const getAllLockedNeighbors = (brd) => {
+        const completedCoords = getCompletedCoords(brd);
+        const lockedSet = new Set();
+        completedCoords.forEach(([r, c]) => {
+            getNeighborCoords(r, c, boardSize, neighborMode).forEach(([nr, nc]) => {
+                if (!brd[nr][nc].visible && !brd[nr][nc].completed) {
+                    lockedSet.add(`${nr},${nc}`);
+                }
             });
+        });
+        // Convert back to objects
+        return Array.from(lockedSet).map(str => {
+            const [r, c] = str.split(",").map(Number);
+            return { row: r, col: c };
+        });
+    };
+
+    // UNLOCK LOGIC
+    const handleTileClick = (tile) => {
+        if (!tile.visible || tile.completed || awaitingUnlock) return;
+        if (unlockMode === "auto") {
+            setBoard((prev) => {
+                // Deep copy board
+                const copy = prev.map((row) => row.map((t) => ({ ...t })));
+                // Mark this tile as completed
+                const t = copy[tile.row][tile.col];
+                t.completed = true;
+
+                // Gather all completed tile coords
+                const completedCoords = [];
+                for (let r = 0; r < boardSize; r++) {
+                    for (let c = 0; c < boardSize; c++) {
+                        if (copy[r][c].completed) completedCoords.push([r, c]);
+                    }
+                }
+                // For each completed tile, unlock all its neighbors
+                completedCoords.forEach(([r, c]) => {
+                    getNeighborCoords(r, c, boardSize, neighborMode).forEach(([nr, nc]) => {
+                        if (!copy[nr][nc].visible) copy[nr][nc].visible = true;
+                    });
+                });
+                return copy;
+            });
+            setScore((s) => s + (tile.task?.value || 1));
+        } else {
+            // MANUAL unlock
+            setBoard((prev) => {
+                const copy = prev.map((row) => row.map((t) => ({ ...t })));
+                // Mark this tile as completed
+                copy[tile.row][tile.col].completed = true;
+                // Find all locked neighbors of all completed tiles
+                const unlockables = getAllLockedNeighbors(copy);
+                setUnlockableTiles(unlockables);
+                setAwaitingUnlock(true);
+                setLastCompleted({ row: tile.row, col: tile.col });
+                return copy;
+            });
+            setScore((s) => s + (tile.task?.value || 1));
+        }
+    };
+
+    // When the user selects a tile to unlock in manual mode
+    const handleManualUnlock = (tile) => {
+        if (!awaitingUnlock) return;
+        setBoard((prev) => {
+            const copy = prev.map((row) => row.map((t) => ({ ...t })));
+            copy[tile.row][tile.col].visible = true;
+            setAwaitingUnlock(false);
+            setUnlockableTiles([]);
+            setLastCompleted(null);
             return copy;
         });
-        setScore((s) => s + (tile.task?.value || 1));
     };
 
     const visibleTasks = board.flat().filter((t) => t.visible && !t.completed);
@@ -167,10 +233,11 @@ export default function TaskBingo({ tasksPool, setTasksPool }) {
             cardId: boardId,
             boardPasswordHash: passwordHash,
             mode: "individual",
-            boardSize, // assuming boardSize is a defined state variable
-            teams: [],
+            boardSize,
             tiles: flattenedTiles,
-            score: score, // make sure to include the current score
+            score: score,
+            unlockMode,
+            neighborMode,
             lastUpdated: new Date().toISOString(),
             createdAt: serverTimestamp(),
         };
@@ -225,6 +292,28 @@ export default function TaskBingo({ tasksPool, setTasksPool }) {
                             <option value="random">Random</option>
                         </select>
                     </label>
+                    <label className="flex flex-col gap-1">
+                        <span className="font-medium">Unlock Mode:</span>
+                        <select
+                            value={unlockMode}
+                            onChange={(e) => setUnlockMode(e.target.value)}
+                            className="border rounded p-2 bg-white text-black dark:bg-gray-800 dark:text-white"
+                        >
+                            <option value="auto">Auto-unlock neighbors (classic)</option>
+                            <option value="manual">Manual: pick one tile to unlock after claim</option>
+                        </select>
+                    </label>
+                    <label className="flex flex-col gap-1">
+                        <span className="font-medium">Neighbor Mode for Unlock:</span>
+                        <select
+                            value={neighborMode}
+                            onChange={(e) => setNeighborMode(e.target.value)}
+                            className="border rounded p-2 bg-white text-black dark:bg-gray-800 dark:text-white"
+                        >
+                            <option value="8">8-direction (N, NE, E, SE, S, SW, W, NW)</option>
+                            <option value="4">4-direction (N, E, S, W only)</option>
+                        </select>
+                    </label>
                     <motion.button
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
@@ -268,11 +357,43 @@ export default function TaskBingo({ tasksPool, setTasksPool }) {
                     }}
                 >
                     <AnimatePresence>
-                        {board.flat().map((tile) => (
-                            <Tile key={`${tile.row}-${tile.col}`} tile={tile} onClick={handleTileClick} />
-                        ))}
+                        {board.flat().map((tile) => {
+                            const isUnlockable =
+                                awaitingUnlock &&
+                                unlockableTiles.some(
+                                    (ut) => ut.row === tile.row && ut.col === tile.col
+                                );
+                            return (
+                                <div
+                                    key={`${tile.row}-${tile.col}`}
+                                    className="relative"
+                                >
+                                    <Tile
+                                        tile={tile}
+                                        onClick={
+                                            awaitingUnlock
+                                                ? isUnlockable
+                                                    ? () => handleManualUnlock(tile)
+                                                    : () => { }
+                                                : () => handleTileClick(tile)
+                                        }
+                                    />
+                                    {isUnlockable && (
+                                        <span
+                                            className="absolute inset-0 rounded-lg border-4 border-yellow-300 pointer-events-none"
+                                            style={{ zIndex: 10 }}
+                                        />
+                                    )}
+                                </div>
+                            );
+                        })}
                     </AnimatePresence>
                 </div>
+                {awaitingUnlock && (
+                    <div className="mt-4 bg-yellow-200 dark:bg-yellow-700 text-yellow-900 dark:text-yellow-100 rounded p-3 shadow text-center font-medium">
+                        Click a highlighted neighbor to unlock!
+                    </div>
+                )}
                 <div className="flex gap-2 mt-6">
                     <motion.button
                         whileHover={{ scale: 1.05 }}

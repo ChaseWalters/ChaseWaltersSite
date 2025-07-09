@@ -1,26 +1,22 @@
 ﻿/* eslint-disable no-unused-vars */
 // src/pages/ManageTasks.jsx
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import ThemeToggle from "../components/ThemeToggle";
 
 export default function ManageTasks({ tasksPool, setTasksPool }) {
     const [sortField, setSortField] = useState("difficulty");
     const [sortDir, setSortDir] = useState("asc");
-
-
-
-    // State for adding a new task
     const [newTask, setNewTask] = useState({
         name: "",
         description: "",
         difficulty: 1,
         value: 1,
     });
-
-    // State for inline editing: which card is being edited and its values.
     const [editingIndex, setEditingIndex] = useState(null);
     const [editingTask, setEditingTask] = useState(null);
+
+    const navigate = useNavigate();
 
     // Sorting tasks for display
     const sortedTasks = tasksPool
@@ -324,15 +320,13 @@ export default function ManageTasks({ tasksPool, setTasksPool }) {
                 ))}
             </div>
 
-
-
             <div className="flex justify-center mt-6">
-                <Link
-                    to="/game"
+                <button
+                    onClick={() => navigate("/")}
                     className="p-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded"
                 >
-                    Back to Game
-                </Link>
+                    Back to Setup
+                </button>
             </div>
         </div>
     );

@@ -181,10 +181,8 @@ function App() {
 
     return (
         <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/game" element={<TaskBingo tasksPool={tasksPool} setTasksPool={setTasksPool} />} />
+            <Route path="/" element={<Home tasksPool={tasksPool} setTasksPool={setTasksPool} />} />  
             <Route path="/manage-tasks" element={<ManageTasks tasksPool={tasksPool} setTasksPool={setTasksPool} />} />
-            <Route path="/create-board" element={<CreateBoard />} />
             <Route path="/shared/:cardId" element={<SharedBoard />} />
         </Routes>
     );
