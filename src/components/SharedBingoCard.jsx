@@ -571,7 +571,8 @@ export default function SharedBingoCard({ cardId }) {
                     };
                 } else {
                     allWereMines = false;
-                    newTiles[idx] = { ...nTile, visible: true, completed: true };
+                    // Only reveal, don't complete for regular tasks!
+                    newTiles[idx] = { ...nTile, visible: true, completed: false };
                 }
             });
 

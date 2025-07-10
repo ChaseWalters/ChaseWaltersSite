@@ -1,4 +1,4 @@
-/* eslint-disable no-unused-vars */
+﻿/* eslint-disable no-unused-vars */
 import React from "react";
 import { motion } from "framer-motion";
 
@@ -100,7 +100,10 @@ const Tile = ({ tile, onClick, claimedTeams = [], canUnlock = false, tileSize = 
             }}
         >
             <span className="block w-full overflow-hidden text-[0.6rem] md:text-xs leading-tight line-clamp-3 break-words px-1">
-                {tile.task?.name}
+                {(tile.completed && tile.isMine)
+                    ? <span style={{ fontSize: "2em" }} role="img" aria-label="Bomb">💣</span>
+                    : tile.task?.name
+                }
             </span>
             {/* Checkmark overlay for completed */}
             {tile.completed && (
