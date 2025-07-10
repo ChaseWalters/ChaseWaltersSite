@@ -37,9 +37,6 @@ export default function SharedBingoCard({ cardId }) {
     const [recentMines, setRecentMines] = useState([]);
     const [minePenalty, setMinePenalty] = useState(0);
 
-    // --- For solo mode point tracking (not persisted) ---
-    const [soloScorePenalty, setSoloScorePenalty] = useState(0);
-
     useEffect(() => {
         const cardRef = doc(db, "bingoCards", cardId);
         const unsubscribe = onSnapshot(cardRef, (docSnapshot) => {
@@ -209,8 +206,7 @@ export default function SharedBingoCard({ cardId }) {
                         : [];
                 return claimedBy.includes(t.name);
             });
-            const score = claimed.reduce((sum, tile) => sum + (tile.task?.value || 1), 0);
-            // Subtract mine penalties (optional: you can persist penalties in the future)
+            const score = claimed.reduce((sum, tile) => sum + (typeof tile.task?.value === "number" ? tile.task.value : 1), 0);
             return { ...t, score };
         });
     }
@@ -321,18 +317,34 @@ export default function SharedBingoCard({ cardId }) {
                     ? [tile.visibleTeams]
                     : [];
             if (claimedBy.includes(team.name)) return;
-            claimedBy.push(team.name);
-            if (!visibleTeams.includes(team.name)) visibleTeams.push(team.name);
 
-            newTiles[tileIndex] = {
-                ...tile,
-                claimedBy,
-                visibleTeams,
-                completed: true,
-            };
+            // BOMB LOGIC: If team claims a mine, mark as completed, claimed, visible and negative value
+            if (tile.isMine) {
+                if (!claimedBy.includes(team.name)) claimedBy.push(team.name);
+                if (!visibleTeams.includes(team.name)) visibleTeams.push(team.name);
+                newTiles[tileIndex] = {
+                    ...tile,
+                    claimedBy,
+                    visibleTeams,
+                    completed: true,
+                    task: {
+                        ...tile.task,
+                        value: -mineDamage
+                    }
+                };
+            } else {
+                // Normal claim for non-mine
+                claimedBy.push(team.name);
+                if (!visibleTeams.includes(team.name)) visibleTeams.push(team.name);
+                newTiles[tileIndex] = {
+                    ...tile,
+                    claimedBy,
+                    visibleTeams,
+                    completed: true,
+                };
+            }
 
             if (unlockMode === "manual") {
-                // MANUAL: prompt for neighbors to unlock for THIS team only
                 const eligible = getEligibleLockedNeighbors(newTiles, boardSize, cardData.neighborMode || "8", team?.name);
                 if (eligible.length === 0) {
                     await confirmManualUnlocks([], tileIndex);
@@ -389,10 +401,23 @@ export default function SharedBingoCard({ cardId }) {
         } else {
             // --- SOLO MODE ---
             if (!tile.visible || tile.completed) return;
-            newTiles[tileIndex] = {
-                ...tile,
-                completed: true,
-            };
+            if (tile.isMine) {
+                newTiles[tileIndex] = {
+                    ...tile,
+                    completed: true,
+                    visible: true,
+                    task: {
+                        ...tile.task,
+                        value: -mineDamage
+                    }
+                };
+            } else {
+                newTiles[tileIndex] = {
+                    ...tile,
+                    completed: true,
+                    visible: true
+                };
+            }
 
             if (unlockMode === "manual") {
                 const eligible = getEligibleLockedNeighbors(newTiles, boardSize, cardData.neighborMode || "8", null);
@@ -444,15 +469,13 @@ export default function SharedBingoCard({ cardId }) {
         const isTeam = isTeamMode;
         const teamName = team?.name;
         const newTiles = [...cardData.tiles];
-
-        // --- MINE LOGIC ---
         const mineDamage = cardData.mineDamage || 0;
+
+        // Animate mine hit
         let minesHit = [];
         selectedIndices.forEach(idx => {
             if (newTiles[idx]?.isMine) minesHit.push(idx);
         });
-
-        // Deduct mineDamage per mine hit, and show animation
         if (minesHit.length > 0) {
             setRecentMines(minesHit);
             setMinePenalty(mineDamage * minesHit.length);
@@ -460,7 +483,7 @@ export default function SharedBingoCard({ cardId }) {
             setTimeout(() => setMinePenalty(0), 1800);
         }
 
-        // Mark the tile just claimed for this team
+        // Mark the tile just claimed for this team/solo
         if (claimIdx !== null && newTiles[claimIdx]) {
             if (isTeam) {
                 let t = newTiles[claimIdx];
@@ -468,22 +491,50 @@ export default function SharedBingoCard({ cardId }) {
                 let visibleTeams = Array.isArray(t.visibleTeams) ? [...t.visibleTeams] : t.visibleTeams ? [t.visibleTeams] : [];
                 if (!claimedBy.includes(teamName)) claimedBy.push(teamName);
                 if (!visibleTeams.includes(teamName)) visibleTeams.push(teamName);
-                newTiles[claimIdx] = {
-                    ...t,
-                    claimedBy,
-                    visibleTeams,
-                    completed: true,
-                };
+                // If it's a mine, set value negative
+                if (t.isMine) {
+                    newTiles[claimIdx] = {
+                        ...t,
+                        claimedBy,
+                        visibleTeams,
+                        completed: true,
+                        task: {
+                            ...t.task,
+                            value: -mineDamage
+                        }
+                    };
+                } else {
+                    newTiles[claimIdx] = {
+                        ...t,
+                        claimedBy,
+                        visibleTeams,
+                        completed: true,
+                    };
+                }
             } else {
-                newTiles[claimIdx] = { ...newTiles[claimIdx], completed: true };
+                let t = newTiles[claimIdx];
+                // If it's a mine, set value negative
+                if (t.isMine) {
+                    newTiles[claimIdx] = {
+                        ...t,
+                        completed: true,
+                        visible: true,
+                        task: {
+                            ...t.task,
+                            value: -mineDamage
+                        }
+                    };
+                } else {
+                    newTiles[claimIdx] = { ...t, completed: true, visible: true };
+                }
             }
         }
 
-        // Unlock chosen neighbors for THIS team only
-        selectedIndices.forEach(idx => {
-            let nTile = newTiles[idx];
-            if (isTeam) {
-                let nVisTeams = Array.isArray(nTile.visibleTeams) ? [...nTile.visibleTeams] : [];
+        // Unlock chosen neighbors for THIS team only (solo and team)
+        if (isTeam) {
+            selectedIndices.forEach(idx => {
+                let nTile = newTiles[idx];
+                let nVisTeams = Array.isArray(nTile.visibleTeams) ? [...nTile.visibleTeams] : nTile.visibleTeams ? [nTile.visibleTeams] : [];
                 let nClaimedBy = Array.isArray(nTile.claimedBy) ? [...nTile.claimedBy] : nTile.claimedBy ? [nTile.claimedBy] : [];
                 if (!nVisTeams.includes(teamName)) nVisTeams.push(teamName);
 
@@ -502,8 +553,12 @@ export default function SharedBingoCard({ cardId }) {
                 } else {
                     newTiles[idx] = { ...nTile, visibleTeams: nVisTeams };
                 }
-            } else {
-                // SOLO
+            });
+        } else {
+            // SOLO
+            let allWereMines = true;
+            selectedIndices.forEach(idx => {
+                let nTile = newTiles[idx];
                 if (nTile.isMine) {
                     newTiles[idx] = {
                         ...nTile,
@@ -515,29 +570,28 @@ export default function SharedBingoCard({ cardId }) {
                         }
                     };
                 } else {
-                    newTiles[idx] = { ...nTile, visible: true };
+                    allWereMines = false;
+                    newTiles[idx] = { ...nTile, visible: true, completed: true };
                 }
-            }
-        });
+            });
 
-        // --- Allow extra unlock per mine triggered ---
-        let extraAllowed = 0;
-        if (minesHit.length > 0) {
-            extraAllowed = minesHit.length;
-        }
-        if (extraAllowed > 0) {
-            // Find all remaining eligible locked neighbors
-            const eligible = getEligibleLockedNeighbors(newTiles, boardSize, cardData.neighborMode || "8", isTeam ? teamName : null);
-            // Remove any already selected or just unlocked
-            const newEligible = eligible.filter(idx => !selectedIndices.includes(idx));
-            if (newEligible.length > 0) {
-                setPendingManualUnlocks({
-                    allowed: extraAllowed,
-                    eligible: newEligible,
-                    selected: [],
-                });
-                // Don't clear pendingClaimTileIndex yet!
-                return;
+            // After revealing, check if all picks were mines and if there are tasks left
+            if (
+                allWereMines &&
+                newTiles.some(t => !t.visible && !t.completed && !t.isMine)
+            ) {
+                // Allow one more pick
+                const eligible = newTiles
+                    .map((t, idx) => (!t.visible && !t.completed && !t.isMine ? idx : null))
+                    .filter(idx => idx !== null);
+                if (eligible.length > 0) {
+                    setPendingManualUnlocks({
+                        allowed: 1,
+                        eligible,
+                        selected: []
+                    });
+                    return;
+                }
             }
         }
 
