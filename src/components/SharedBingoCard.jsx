@@ -37,6 +37,9 @@ export default function SharedBingoCard({ cardId }) {
     const [recentMines, setRecentMines] = useState([]);
     const [minePenalty, setMinePenalty] = useState(0);
 
+    const [showEarlyConfirmModal, setShowEarlyConfirmModal] = useState(false);
+
+
     useEffect(() => {
         const cardRef = doc(db, "bingoCards", cardId);
         const unsubscribe = onSnapshot(cardRef, (docSnapshot) => {
@@ -670,12 +673,7 @@ export default function SharedBingoCard({ cardId }) {
     };
 
     // --- Manual unlock confirm logic ---
-    const canConfirmManualUnlocks =
-        !!pendingManualUnlocks &&
-        pendingManualUnlocks.selected.length === Math.min(
-            pendingManualUnlocks.allowed,
-            pendingManualUnlocks.eligible.length
-        );
+    const canConfirmManualUnlocks = !!pendingManualUnlocks; // Always true if in unlock phase
 
     function renderSoloSidebar() {
         if (!isSoloMode) return null;
@@ -896,9 +894,18 @@ export default function SharedBingoCard({ cardId }) {
                         </div>
                         <div className="flex justify-center gap-4">
                             <button
-                                className={`px-4 py-2 rounded bg-blue-600 text-white font-semibold transition-colors ${canConfirmManualUnlocks ? "hover:bg-blue-700" : "opacity-50 cursor-not-allowed"}`}
+                                className={`px-4 py-2 rounded bg-blue-600 text-white font-semibold transition-colors ${canConfirmManualUnlocks ? "hover:bg-blue-700" : "opacity-50 cursor-not-allowed"
+                                    }`}
                                 disabled={!canConfirmManualUnlocks}
-                                onClick={() => confirmManualUnlocks()}
+                                onClick={() => {
+                                    if (
+                                        pendingManualUnlocks.selected.length < Math.min(pendingManualUnlocks.allowed, pendingManualUnlocks.eligible.length)
+                                    ) {
+                                        setShowEarlyConfirmModal(true);
+                                    } else {
+                                        confirmManualUnlocks();
+                                    }
+                                }}
                             >
                                 Confirm Unlocks
                             </button>
@@ -911,6 +918,51 @@ export default function SharedBingoCard({ cardId }) {
                             >
                                 Cancel
                             </button>
+                        </div>
+                    </div>
+                )}
+                {showEarlyConfirmModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-xs w-full text-center">
+                            <div className="mb-4 text-lg font-semibold text-red-700 dark:text-red-300">
+                                {pendingManualUnlocks.selected.length === 0
+                                    ? "No Tiles Selected"
+                                    : "Fewer Than Allowed Unlocks"}
+                            </div>
+                            <div className="mb-4 text-gray-700 dark:text-gray-200">
+                                {pendingManualUnlocks.selected.length === 0
+                                    ? (
+                                        <>
+                                            You have not selected any unlocks.<br />
+                                            <b>You will not get these unlocks back.</b><br />
+                                            Are you sure you want to skip your unlocks?
+                                        </>
+                                    ) : (
+                                        <>
+                                            You have selected fewer than the allowed number of unlocks.<br />
+                                            <b>You will not get these unlocks back.</b><br />
+                                            Are you sure you want to confirm?
+                                        </>
+                                    )
+                                }
+                            </div>
+                            <div className="flex gap-4 justify-center">
+                                <button
+                                    className="bg-blue-600 hover:bg-blue-700 text-white rounded px-4 py-2"
+                                    onClick={() => {
+                                        setShowEarlyConfirmModal(false);
+                                        confirmManualUnlocks();
+                                    }}
+                                >
+                                    Yes, Confirm
+                                </button>
+                                <button
+                                    className="bg-gray-400 hover:bg-gray-500 text-white rounded px-4 py-2"
+                                    onClick={() => setShowEarlyConfirmModal(false)}
+                                >
+                                    Cancel
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}
