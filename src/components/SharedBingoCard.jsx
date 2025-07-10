@@ -164,6 +164,13 @@ export default function SharedBingoCard({ cardId }) {
         );
     }
 
+    function getSoloScore() {
+        if (!cardData || cardData.mode !== "individual") return 0;
+        return cardData.tiles
+            .filter(t => t.completed)
+            .reduce((sum, t) => sum + (typeof t.task?.value === "number" ? t.task.value : 1), 0);
+    }
+
     // --- Team login logic ---
     async function handleLogin() {
         setLoginError(null);
@@ -451,12 +458,6 @@ export default function SharedBingoCard({ cardId }) {
             setMinePenalty(mineDamage * minesHit.length);
             setTimeout(() => setRecentMines([]), 1600);
             setTimeout(() => setMinePenalty(0), 1800);
-
-            // --- Optional: For teams, you'd update score in DB if you persist penalties. ---
-            // For solo, just show a penalty notification.
-            if (!isTeam) {
-                setSoloScorePenalty((prev) => prev + mineDamage * minesHit.length);
-            }
         }
 
         // Mark the tile just claimed for this team
@@ -584,6 +585,7 @@ export default function SharedBingoCard({ cardId }) {
         }));
     }
 
+
     // Helper: get all claimed teams for a tile (for badges/colors)
     const getClaimedTeams = (tile) => {
         const claimedBy = Array.isArray(tile.claimedBy)
@@ -620,6 +622,54 @@ export default function SharedBingoCard({ cardId }) {
             pendingManualUnlocks.eligible.length
         );
 
+    function renderSoloSidebar() {
+        if (!isSoloMode) return null;
+        const visibleTiles = getVisibleTiles();
+        const visibleTasks = visibleTiles.filter(t => t.visible && !t.completed);
+
+        return (
+            <aside className="w-full md:w-72 flex flex-col gap-4">
+                <h3 className="text-xl font-bold">Overall Score</h3>
+                <div className="p-3 text-2xl font-bold bg-green-100 dark:bg-green-700 rounded text-center shadow">
+                    {getSoloScore()}
+                </div>
+                <h3 className="text-xl font-bold mt-4">
+                    Available Tasks ({visibleTasks.length})
+                </h3>
+                <div className="flex flex-col gap-2 max-h-[70vh] overflow-auto pr-2">
+                    {visibleTasks.map((t, idx) => (
+                        <motion.div
+                            key={idx}
+                            className="border p-2 rounded-lg shadow flex flex-col gap-1 bg-white dark:bg-gray-700"
+                            initial={{ y: 10, opacity: 0 }}
+                            animate={{ y: 0, opacity: 1 }}
+                            transition={{ delay: 0.05 * idx }}
+                        >
+                            <span className="font-semibold">{t.task?.name}</span>
+                            <span className="text-sm text-gray-600 dark:text-gray-300">
+                                {t.task?.description}
+                            </span>
+                            {t.task?.difficulty != null && (
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                    Difficulty: {t.task.difficulty}
+                                </span>
+                            )}
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                                Value: {t.task?.value ?? 1}
+                            </span>
+                        </motion.div>
+                    ))}
+                </div>
+                {mineCount > 0 && unlockMode === "manual" && (
+                    <div className="mt-4 bg-yellow-50 dark:bg-yellow-900 text-yellow-900 dark:text-yellow-100 rounded px-4 py-2 font-semibold shadow">
+                        <span role="img" aria-label="mine">💣</span> Mines on board: <b>{mineCount}</b><br />
+                        Bomb damage: <b>{mineDamage}</b> points
+                    </div>
+                )}
+            </aside>
+        );
+    }
+
     // --- Render ---
     return (
         <motion.div
@@ -628,8 +678,7 @@ export default function SharedBingoCard({ cardId }) {
             animate={{ opacity: 1 }}
         >
             <ThemeToggle />
-            {/* Team sidebar */}
-            {isTeamMode && (
+            {isSoloMode ? renderSoloSidebar() : isTeamMode && (
                 <aside className="w-full md:w-72 flex flex-col gap-4">
                     <h3 className="text-xl font-bold">Team Scores</h3>
                     <div className="flex flex-col gap-2">
