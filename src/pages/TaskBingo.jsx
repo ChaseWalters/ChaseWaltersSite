@@ -240,7 +240,19 @@ export default function TaskBingo({ tasksPool, setTasksPool }) {
         setBoard(prev => {
             const copy = prev.map(row => row.map(t => ({ ...t })));
             pendingUnlocks.forEach(tile => {
-                copy[tile.row][tile.col].visible = true;
+                if (copy[tile.row][tile.col].isMine) {
+                    copy[tile.row][tile.col] = {
+                        ...copy[tile.row][tile.col],
+                        visible: true,
+                        completed: true,
+                        task: {
+                            ...copy[tile.row][tile.col].task,
+                            value: -mineDamage
+                        }
+                    };
+                } else {
+                    copy[tile.row][tile.col].visible = true;
+                }
             });
             return copy;
         });
@@ -627,7 +639,6 @@ export default function TaskBingo({ tasksPool, setTasksPool }) {
                         </motion.div>
                     ))}
                 </div>
-                {/* --- Mines Info --- */}
                 {enableMines && unlockMode === "manual" && (
                     <div className="mt-4 bg-yellow-50 dark:bg-yellow-900 text-yellow-900 dark:text-yellow-100 rounded px-4 py-2 font-semibold shadow">
                         <span role="img" aria-label="mine">💣</span> Mines on board: <b>{mineCount}</b><br />

@@ -480,13 +480,42 @@ export default function SharedBingoCard({ cardId }) {
 
         // Unlock chosen neighbors for THIS team only
         selectedIndices.forEach(idx => {
+            let nTile = newTiles[idx];
             if (isTeam) {
-                let nTile = newTiles[idx];
                 let nVisTeams = Array.isArray(nTile.visibleTeams) ? [...nTile.visibleTeams] : [];
+                let nClaimedBy = Array.isArray(nTile.claimedBy) ? [...nTile.claimedBy] : nTile.claimedBy ? [nTile.claimedBy] : [];
                 if (!nVisTeams.includes(teamName)) nVisTeams.push(teamName);
-                newTiles[idx] = { ...nTile, visibleTeams: nVisTeams };
+
+                if (nTile.isMine) {
+                    if (!nClaimedBy.includes(teamName)) nClaimedBy.push(teamName);
+                    newTiles[idx] = {
+                        ...nTile,
+                        visibleTeams: nVisTeams,
+                        claimedBy: nClaimedBy,
+                        completed: true,
+                        task: {
+                            ...nTile.task,
+                            value: -mineDamage
+                        }
+                    };
+                } else {
+                    newTiles[idx] = { ...nTile, visibleTeams: nVisTeams };
+                }
             } else {
-                newTiles[idx] = { ...newTiles[idx], visible: true };
+                // SOLO
+                if (nTile.isMine) {
+                    newTiles[idx] = {
+                        ...nTile,
+                        visible: true,
+                        completed: true,
+                        task: {
+                            ...nTile.task,
+                            value: -mineDamage
+                        }
+                    };
+                } else {
+                    newTiles[idx] = { ...nTile, visible: true };
+                }
             }
         });
 
