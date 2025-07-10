@@ -580,7 +580,9 @@ export default function SharedBingoCard({ cardId }) {
             });
 
             // After revealing, check if all picks were mines and if there are tasks left
+            // Only allow a "free" extra pick if ALL picks were mines AND user actually picked something
             if (
+                selectedIndices.length > 0 &&
                 allWereMines &&
                 newTiles.some(t => !t.visible && !t.completed && !t.isMine)
             ) {
