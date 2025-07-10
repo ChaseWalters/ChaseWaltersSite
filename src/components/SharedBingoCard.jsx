@@ -84,9 +84,9 @@ export default function SharedBingoCard({ cardId }) {
     // --- Login/Password UI ---
     if (isSoloMode && !soloAccess) {
         return (
-            <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-4">
+            <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-4 bg-gray-100 dark:bg-gray-900">
                 <ThemeToggle />
-                <h2 className="text-2xl font-bold mb-2">Enter Board Password</h2>
+                <h2 className="text-2xl font-bold mb-2 text-gray-900 dark:text-gray-100">Enter Board Password</h2>
                 <div className="flex flex-col gap-2 bg-white dark:bg-gray-700 p-4 rounded shadow">
                     <input
                         type="password"
@@ -123,9 +123,9 @@ export default function SharedBingoCard({ cardId }) {
     }
     if (isTeamMode && !team) {
         return (
-            <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-4">
+            <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-4 bg-gray-100 dark:bg-gray-900">
                 <ThemeToggle />
-                <h2 className="text-2xl font-bold mb-2">Team Login</h2>
+                <h2 className="text-2xl font-bold mb-2 text-gray-900 dark:text-gray-100">Team Login</h2>
                 <div className="flex flex-col gap-2 bg-white dark:bg-gray-700 p-4 rounded shadow">
                     <label>
                         <span className="font-medium">Select team:</span>

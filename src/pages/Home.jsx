@@ -85,12 +85,42 @@ export default function Home({ tasksPool, setTasksPool }) {
         );
     };
 
+    const handleBoardSizeChange = (value) => {
+        let size = parseInt(value, 10) || 3;
+        if (size < 3) size = 3;
+        if (size > 15) size = 15;
+        if (size % 2 === 0) size += 1; // Snap to next odd if even
+        setBoardSize(size);
+        // Also clamp mine count (if mines enabled)
+        if (enableMines && mineCount > size * size - 1) {
+            setMineCount(size * size - 1);
+        }
+    };
+
+    const handleMineCountChange = (value) => {
+        let maxMines = boardSize * boardSize - 1;
+        let mines = parseInt(value, 10) || 1;
+        if (mines > maxMines) mines = maxMines;
+        if (mines < 1) mines = 1;
+        setMineCount(mines);
+    };
+
     // Main board creation handler
     const handleShareBoard = async () => {
         setError(null);
         setLoading(true);
 
         // Validation
+        if (boardSize % 2 === 0) {
+            setError("Board size must be an odd number (e.g., 3, 5, 7, etc).");
+            setLoading(false);
+            return;
+        }
+        if (enableMines && mineCount > boardSize * boardSize - 1) {
+            setError(`Number of mines cannot exceed total tiles minus one (${boardSize * boardSize - 1}).`);
+            setLoading(false);
+            return;
+        }
         if (tasksPool.length < boardSize * boardSize) {
             setError("Not enough tasks to fill the board. Please add more tasks.");
             setLoading(false);
@@ -251,11 +281,14 @@ export default function Home({ tasksPool, setTasksPool }) {
                             type="number"
                             min={3}
                             max={15}
-                            step={1}
+                            step={2}
                             value={boardSize}
-                            onChange={e => setBoardSize(Math.max(3, Math.min(15, Number(e.target.value) || 5)))}
+                            onChange={e => handleBoardSizeChange(e.target.value)}
                             className="p-2 border rounded bg-white text-black"
                         />
+                        <span className="text-xs text-gray-500">
+                            Must be odd (3, 5, 7, ...). No even sizes allowed.
+                        </span>
                     </label>
                     <label className="flex flex-col gap-1">
                         <span className="font-medium">Difficulty Mode:</span>
@@ -311,11 +344,12 @@ export default function Home({ tasksPool, setTasksPool }) {
                                             min={1}
                                             max={boardSize * boardSize - 1}
                                             value={mineCount}
-                                            onChange={e =>
-                                                setMineCount(Math.max(1, Math.min(boardSize * boardSize - 1, Number(e.target.value) || 1)))
-                                            }
+                                            onChange={e => handleMineCountChange(e.target.value)}
                                             className="p-2 border rounded bg-white text-black dark:bg-gray-800 dark:text-white w-24"
                                         />
+                                        <span className="text-xs text-gray-500 ml-2">
+                                            Max: {boardSize * boardSize - 1}
+                                        </span>
                                     </label>
                                     <label>
                                         <span className="font-medium">Bomb Damage (points lost):</span>
