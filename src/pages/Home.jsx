@@ -197,7 +197,13 @@ export default function Home({ tasksPool, setTasksPool }) {
             }
             tileTasks = tileTasks.slice(0, numTiles - (enableMines ? mineCount : 0));
         } else {
-            tileTasks = shuffle([...tasksPool]).slice(0, numTiles - (enableMines ? mineCount : 0));
+            const neededTasks = numTiles - (enableMines ? mineCount : 0);
+            if (tasksPool.length < neededTasks) {
+                setError(`Not enough tasks to fill the board (need ${neededTasks}, have ${tasksPool.length}). Please add more tasks or enable duplicates.`);
+                setLoading(false);
+                return;
+            }
+            tileTasks = shuffle([...tasksPool]).slice(0, neededTasks);
         }
 
         // Prepare bomb indices so that center tile is never a bomb
