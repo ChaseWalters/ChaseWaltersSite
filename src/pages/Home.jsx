@@ -45,6 +45,7 @@ export default function Home({ tasksPool, setTasksPool }) {
     const [enableMines, setEnableMines] = useState(false);
     const [mineCount, setMineCount] = useState(3);
     const [mineDamage, setMineDamage] = useState(10);
+    const [allowDuplicates, setAllowDuplicates] = useState(true);
 
 
     // Teams state
@@ -110,21 +111,42 @@ export default function Home({ tasksPool, setTasksPool }) {
         setError(null);
         setLoading(true);
 
+        const numTiles = boardSize * boardSize;
+        const numTasks = tasksPool.length;
+        const bombsNeededIfNoDuplicates = Math.max(0, numTiles - numTasks);
+
         // Validation
         if (boardSize % 2 === 0) {
             setError("Board size must be an odd number (e.g., 3, 5, 7, etc).");
             setLoading(false);
             return;
         }
-        if (enableMines && mineCount > boardSize * boardSize - 1) {
-            setError(`Number of mines cannot exceed total tiles minus one (${boardSize * boardSize - 1}).`);
+        if (enableMines && mineCount > numTiles - 1) {
+            setError(`Number of mines cannot exceed total tiles minus one (${numTiles - 1}).`);
             setLoading(false);
             return;
         }
-        if (tasksPool.length < boardSize * boardSize) {
-            setError("Not enough tasks to fill the board. Please add more tasks.");
-            setLoading(false);
-            return;
+        if (!allowDuplicates) {
+            if (numTasks + (enableMines ? mineCount : 0) < numTiles) {
+                setError(
+                    `Not enough tasks and bombs to fill the board. You need at least ${bombsNeededIfNoDuplicates} bombs for missing tasks, or add more tasks.`
+                );
+                setLoading(false);
+                return;
+            }
+            if (enableMines && mineCount < bombsNeededIfNoDuplicates) {
+                setError(
+                    `You must have at least ${bombsNeededIfNoDuplicates} bombs for missing tasks.`
+                );
+                setLoading(false);
+                return;
+            }
+        } else {
+            if (numTasks < numTiles && !enableMines) {
+                setError("Not enough tasks to fill the board. Please add more tasks or enable bombs/duplicates.");
+                setLoading(false);
+                return;
+            }
         }
         if (!boardPassword || !boardPassword.trim()) {
             setError("Please set a board password (for editing/sharing).");
@@ -143,7 +165,6 @@ export default function Home({ tasksPool, setTasksPool }) {
                     setLoading(false);
                     return;
                 }
-                // Prevent captain and member passwords from being identical
                 if (team.password.trim() === team.memberPassword.trim()) {
                     setError(`Captain and Team Member passwords must be different for team "${team.name || '(unnamed)'}".`);
                     setLoading(false);
@@ -165,27 +186,52 @@ export default function Home({ tasksPool, setTasksPool }) {
             );
         }
 
-        // Populate tiles
-        let tileTasks = shuffle([...tasksPool]);
-        while (tileTasks.length < boardSize * boardSize) {
-            tileTasks = [...tileTasks, ...shuffle(tasksPool)];
-        }
-        tileTasks = tileTasks.slice(0, boardSize * boardSize);
+        // Populate tiles (tasks and bombs)
+        let tileTasks = [];
+        let bombIndices = [];
 
-        // Assign tasks to tiles
+        if (allowDuplicates) {
+            tileTasks = shuffle([...tasksPool]);
+            while (tileTasks.length < numTiles - (enableMines ? mineCount : 0)) {
+                tileTasks = [...tileTasks, ...shuffle(tasksPool)];
+            }
+            tileTasks = tileTasks.slice(0, numTiles - (enableMines ? mineCount : 0));
+        } else {
+            tileTasks = shuffle([...tasksPool]).slice(0, numTiles - (enableMines ? mineCount : 0));
+        }
+
+        // Prepare bomb indices so that center tile is never a bomb
         const center = Math.floor(boardSize / 2);
+        const allIndices = [];
+        for (let r = 0; r < boardSize; r++) {
+            for (let c = 0; c < boardSize; c++) {
+                if (!(r === center && c === center)) {
+                    allIndices.push(r * boardSize + c);
+                }
+            }
+        }
+        bombIndices = enableMines
+            ? shuffle(allIndices).slice(0, mineCount)
+            : [];
+
+        // Assign tasks and bombs to tiles
         let tiles = [];
         let taskIndex = 0;
         for (let r = 0; r < boardSize; r++) {
             for (let c = 0; c < boardSize; c++) {
-                let task = tileTasks[taskIndex++];
-                if (difficultyMode === "distance") {
-                    const distance = manhattan(r, c, center);
-                    const tierTasks = tasksPool.filter(
-                        (t) => (t.difficulty || 0) === Math.min(distance, 4)
-                    );
-                    if (tierTasks.length > 0) {
-                        task = tierTasks[Math.floor(Math.random() * tierTasks.length)];
+                const idx = r * boardSize + c;
+                const isMine = bombIndices.includes(idx);
+                let task = null;
+                if (!isMine && taskIndex < tileTasks.length) {
+                    task = tileTasks[taskIndex++];
+                    if (difficultyMode === "distance") {
+                        const distance = manhattan(r, c, center);
+                        const tierTasks = tasksPool.filter(
+                            (t) => (t.difficulty || 0) === Math.min(distance, 4)
+                        );
+                        if (tierTasks.length > 0) {
+                            task = tierTasks[Math.floor(Math.random() * tierTasks.length)];
+                        }
                     }
                 }
                 const tile = {
@@ -194,10 +240,10 @@ export default function Home({ tasksPool, setTasksPool }) {
                     task,
                     completed: false,
                     visible: r === center && c === center,
+                    isMine,
                 };
                 if (boardType === "team") {
                     tile.claimedBy = null;
-                    // Per-team unlocks: only center tile is visible to all teams, others start hidden
                     if (perTeamUnlocks) {
                         if (r === center && c === center) {
                             tile.visibleTeams = teamsWithHash.map(t => t.name);
@@ -207,18 +253,6 @@ export default function Home({ tasksPool, setTasksPool }) {
                     }
                 }
                 tiles.push(tile);
-            }
-        }
-
-        if (unlockMode === "manual" && enableMines && mineCount > 0) {
-            // Don't allow mine on center tile
-            const center = Math.floor(boardSize / 2);
-            const validIndices = tiles
-                .map((tile, idx) => (tile.row !== center || tile.col !== center ? idx : null))
-                .filter(idx => idx !== null);
-            const shuffled = shuffle(validIndices);
-            for (let i = 0; i < Math.min(mineCount, shuffled.length); i++) {
-                tiles[shuffled[i]].isMine = true;
             }
         }
 
@@ -244,8 +278,7 @@ export default function Home({ tasksPool, setTasksPool }) {
             createdAt: serverTimestamp(),
             perTeamUnlocks: boardType === "team" ? perTeamUnlocks : false,
             firstClaimBonus: boardType === "team" ? firstClaimBonus : 0,
-
-
+            allowDuplicates,
         };
 
         try {
@@ -289,6 +322,14 @@ export default function Home({ tasksPool, setTasksPool }) {
                         <span className="text-xs text-gray-500">
                             Must be odd (3, 5, 7, ...). No even sizes allowed.
                         </span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                        <input
+                            type="checkbox"
+                            checked={allowDuplicates}
+                            onChange={e => setAllowDuplicates(e.target.checked)}
+                        />
+                        <span className="font-medium">Allow duplicate tasks (fill with repeats if needed)</span>
                     </label>
                     <label className="flex flex-col gap-1">
                         <span className="font-medium">Difficulty Mode:</span>
