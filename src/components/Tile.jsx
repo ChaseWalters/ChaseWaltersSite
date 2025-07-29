@@ -8,6 +8,13 @@ const tileVariants = {
 };
 
 const Tile = ({ tile, onClick, claimedTeams = [], canUnlock = false, tileSize = 64, currentTeam }) => {
+    const badgeSize = Math.max(18, Math.round(tileSize * 0.22)); // 18px minimum, ~22% of tile
+
+    // Font size for task text (scales with tileSize, clamped for readability)
+    const mainFontSize = `clamp(0.55rem, ${tileSize * 0.22}px, 1.1rem)`;
+    // Font size for bomb emoji (bigger)
+    const bombFontSize = `clamp(1.3em, ${tileSize * 0.6}px, 2.2em)`;
+
     // 1. Manual unlock: eligible hidden tile
     if (!tile.visible && canUnlock) {
         return (
@@ -99,9 +106,19 @@ const Tile = ({ tile, onClick, claimedTeams = [], canUnlock = false, tileSize = 
                 borderColor: tile.completed && ourColor ? ourColor : undefined,
             }}
         >
-            <span className="block w-full overflow-hidden text-[0.6rem] md:text-xs leading-tight line-clamp-3 break-words px-1">
+            <span
+                className="block w-full overflow-hidden text-center leading-tight line-clamp-3 break-words px-1"
+                style={{
+                    fontSize: tile.completed && tile.isMine
+                        ? bombFontSize
+                        : mainFontSize,
+                    fontWeight: tile.completed && tile.isMine ? 600 : 500,
+                    paddingTop: `${Math.max(5, tileSize * 0.1)}px`, // Small dynamic buffer (min 2px)
+                    paddingBottom: `${Math.max(5, tileSize * 0.1)}px`, // Small dynamic buffer (min 2px)
+                }}
+            >
                 {(tile.completed && tile.isMine)
-                    ? <span style={{ fontSize: "2em" }} role="img" aria-label="Bomb">💣</span>
+                    ? <span style={{ fontSize: bombFontSize }} role="img" aria-label="Bomb">💣</span>
                     : tile.task?.name
                 }
             </span>
@@ -121,22 +138,47 @@ const Tile = ({ tile, onClick, claimedTeams = [], canUnlock = false, tileSize = 
             )}
             {/* Claimed team badges (if any) */}
             {claimedTeams.length > 0 && (
-                <div className="absolute bottom-1 left-1 flex gap-1 flex-wrap z-10">
-                    {claimedTeams.map((ct, i) => (
+                <div
+                    className="absolute bottom-1 left-1 flex flex-row flex-wrap gap-1 z-10 max-w-full"
+                    style={{
+                        maxWidth: tileSize - 3,
+                    }}
+                >
+                    {claimedTeams.slice(0, 3).map((ct, i) => (
                         <span
                             key={ct.name}
-                            className="px-1 py-0.5 rounded text-xs"
+                            className="rounded text-xs px-1 py-0.5"
                             style={{
+                                minWidth: badgeSize,
+                                maxWidth: badgeSize * 2,
+                                fontSize: Math.max(9, badgeSize * 0.55),
                                 background: ct.color || "#eee",
                                 color: "#fff",
                                 border: "1px solid #000",
                                 fontWeight: 600,
                                 textShadow: "0 1px 2px rgba(0,0,0,0.25)",
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
                             }}
+                            title={ct.name}
                         >
-                            {ct.name}
+                            {ct.name.length > 6 ? ct.name.slice(0, 6) + '…' : ct.name}
                         </span>
                     ))}
+                    {claimedTeams.length > 3 && (
+                        <span
+                            className="rounded text-xs px-1 py-0.5 bg-gray-600 border border-black"
+                            style={{
+                                minWidth: badgeSize,
+                                fontSize: Math.max(9, badgeSize * 0.55),
+                                color: "#fff",
+                            }}
+                            title={claimedTeams.slice(3).map(ct => ct.name).join(", ")}
+                        >
+                            +{claimedTeams.length - 3}
+                        </span>
+                    )}
                 </div>
             )}
         </motion.button>
