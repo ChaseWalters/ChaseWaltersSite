@@ -791,7 +791,7 @@ export default function SharedBingoCard({ cardId }) {
                     )}
                 </aside>
             )}
-            <div className="flex-1 flex flex-col items-center">
+            <div className="flex-1 flex flex-col items-center relative">
                 <motion.h2
                     className="text-2xl font-bold mb-4"
                     initial={{ y: -10, opacity: 0 }}
