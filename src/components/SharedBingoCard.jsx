@@ -7,6 +7,7 @@ import { hashString } from "../utils/crypto";
 import Tile from "./Tile";
 import { motion, AnimatePresence } from "framer-motion";
 import ThemeToggle from "./ThemeToggle";
+import TaskInfoModal from "./TaskInfoModal";
 
 export default function SharedBingoCard({ cardId }) {
     const [cardData, setCardData] = useState(null);
@@ -38,6 +39,7 @@ export default function SharedBingoCard({ cardId }) {
     const [minePenalty, setMinePenalty] = useState(0);
 
     const [showEarlyConfirmModal, setShowEarlyConfirmModal] = useState(false);
+    const [selectedTile, setSelectedTile] = useState(null);
 
 
     useEffect(() => {
@@ -1023,8 +1025,8 @@ export default function SharedBingoCard({ cardId }) {
                                     if (highlight === "eligible") {
                                         handleManualUnlockSelect(realIdx);
                                     }
-                                } else if (isClaimable) {
-                                    claimTile(realIdx);
+                                } else if (tile.visible) {
+                                    setSelectedTile(tile); // Open modal for ANY visible tile
                                 }
                             };
 
@@ -1036,7 +1038,10 @@ export default function SharedBingoCard({ cardId }) {
                                     <Tile
                                         tile={tile}
                                         tileSize={tileSize}
-                                        onClick={handleTileClick}
+                                        onClick={() => {
+                                            if (!tile.visible) return;
+                                            setSelectedTile(tile);
+                                        }}
                                         canUnlock={canUnlock}
                                         claimedTeams={isTeamMode ? getClaimedTeams(tile) : []}
                                         currentTeam={isTeamMode ? team : null}
@@ -1067,6 +1072,29 @@ export default function SharedBingoCard({ cardId }) {
                     </AnimatePresence>
                 </div>
             </div>
+            {selectedTile && (
+                <TaskInfoModal
+                    tile={selectedTile}
+                    claimedTeams={isTeamMode ? getClaimedTeams(selectedTile) : []}
+                    canClaim={
+                        // SOLO: visible & not completed
+                        (!isTeamMode && selectedTile.visible && !selectedTile.completed)
+                        // TEAM: visible, not already claimed by this team, and captain
+                        || (isTeamMode && team && role === "captain" && selectedTile.visible &&
+                            !(
+                                Array.isArray(selectedTile.claimedBy)
+                                    ? selectedTile.claimedBy.includes(team.name)
+                                    : selectedTile.claimedBy === team.name
+                            )
+                        )
+                    }
+                    onClaim={() => {
+                        claimTile(selectedTile.__index);
+                        setSelectedTile(null);
+                    }}
+                    onClose={() => setSelectedTile(null)}
+                />
+            )}
         </motion.div>
     );
 }
