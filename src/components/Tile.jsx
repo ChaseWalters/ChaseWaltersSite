@@ -84,7 +84,7 @@ const Tile = ({ tile, onClick, claimedTeams = [], canUnlock = false, tileSize = 
             transition={{ duration: 0.25 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => onClick(tile)}
-            disabled={tile.completed && !canUnlock}
+            //disabled={tile.completed && !canUnlock}
             className={`relative rounded-lg border overflow-hidden flex items-center justify-center text-center select-none transition-colors duration-150
                 ${tile.completed
                     ? ourColor

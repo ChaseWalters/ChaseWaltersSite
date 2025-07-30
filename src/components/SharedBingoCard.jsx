@@ -1039,8 +1039,13 @@ export default function SharedBingoCard({ cardId }) {
                                         tile={tile}
                                         tileSize={tileSize}
                                         onClick={() => {
-                                            if (!tile.visible) return;
-                                            setSelectedTile(tile);
+                                            if (pendingManualUnlocks) {
+                                                if (highlight === "eligible") {
+                                                    handleManualUnlockSelect(realIdx);
+                                                }
+                                            } else if (tile.visible) {
+                                                setSelectedTile(tile);
+                                            }
                                         }}
                                         canUnlock={canUnlock}
                                         claimedTeams={isTeamMode ? getClaimedTeams(tile) : []}

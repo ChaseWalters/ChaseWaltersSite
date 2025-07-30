@@ -9,14 +9,30 @@ export default function TaskInfoModal({ tile, claimedTeams, canClaim, onClaim, o
         >
             <div
                 className="relative bg-white dark:bg-gray-900 rounded-lg shadow-lg p-6 max-w-md w-full"
-                onClick={e => e.stopPropagation()} // Prevents closing modal when clicking inside card
+                onClick={e => e.stopPropagation()}
             >
                 <button
-                    className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 text-2xl"
+                    className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 p-1 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
                     onClick={onClose}
-                >×</button>
-                <h2 className="text-xl font-bold mb-2">{task.name || "No Task"}</h2>
-                <p className="mb-2 text-gray-700 dark:text-gray-300">{task.description || "No description"}</p>
+                    aria-label="Close"
+                >
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-6 w-6"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                    >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+                <h2 className="text-xl font-bold mb-2">
+                    {tile.isMine ? "BOMB" : (task.name || "No Task")}
+                </h2>
+                <p className="mb-2 text-gray-700 dark:text-gray-300">
+                    {tile.isMine ? "Don't step on these" : (task.description || "No description")}
+                </p>
                 <div className="mb-2 text-sm">
                     <div>Difficulty: {task.difficulty ?? "N/A"}</div>
                     <div>Value: {task.value ?? 1}</div>
