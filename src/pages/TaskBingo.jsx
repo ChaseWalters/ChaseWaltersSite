@@ -64,6 +64,9 @@ export default function TaskBingo({ tasksPool, setTasksPool }) {
     const [recentMines, setRecentMines] = useState([]);
     const [minePenalty, setMinePenalty] = useState(0);
 
+    const bombsHit = board.flat().filter(t => t.isMine && t.completed).length;
+    const minesLeft = mineCount - bombsHit;
+
     const navigate = useNavigate();
 
     // --- Setup: Build Board ---
@@ -641,7 +644,7 @@ export default function TaskBingo({ tasksPool, setTasksPool }) {
                 </div>
                 {enableMines && unlockMode === "manual" && (
                     <div className="mt-4 bg-yellow-50 dark:bg-yellow-900 text-yellow-900 dark:text-yellow-100 rounded px-4 py-2 font-semibold shadow">
-                        <span role="img" aria-label="mine">💣</span> Mines on board: <b>{mineCount}</b><br />
+                        <span role="img" aria-label="mine">💣</span> Mines left: <b>{minesLeft}</b><br />
                         Bomb damage: <b>{mineDamage}</b> points
                     </div>
                 )}

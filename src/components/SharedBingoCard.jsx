@@ -83,6 +83,10 @@ export default function SharedBingoCard({ cardId }) {
     const mineCount = cardData.mineCount || 0;
     const mineDamage = cardData.mineDamage || 0;
 
+    const visibleTiles = getVisibleTiles ? getVisibleTiles() : [];
+    const bombsHit = visibleTiles.filter(t => t.isMine && t.completed).length;
+    const minesLeft = mineCount - bombsHit;
+
     // --- Login/Password UI ---
     if (isSoloMode && !soloAccess) {
         return (
@@ -719,7 +723,7 @@ export default function SharedBingoCard({ cardId }) {
                 </div>
                 {mineCount > 0 && unlockMode === "manual" && (
                     <div className="mt-4 bg-yellow-50 dark:bg-yellow-900 text-yellow-900 dark:text-yellow-100 rounded px-4 py-2 font-semibold shadow">
-                        <span role="img" aria-label="mine">💣</span> Mines on board: <b>{mineCount}</b><br />
+                        <span role="img" aria-label="mine">💣</span> Mines left: <b>{minesLeft}</b><br />
                         Bomb damage: <b>{mineDamage}</b> points
                     </div>
                 )}
@@ -785,7 +789,7 @@ export default function SharedBingoCard({ cardId }) {
                     {/* --- Mines Info --- */}
                     {mineCount > 0 && unlockMode === "manual" && (
                         <div className="mt-4 bg-yellow-50 dark:bg-yellow-900 text-yellow-900 dark:text-yellow-100 rounded px-4 py-2 font-semibold shadow">
-                            <span role="img" aria-label="mine">💣</span> Mines on board: <b>{mineCount}</b><br />
+                            <span role="img" aria-label="mine">💣</span> Mines left: <b>{minesLeft}</b><br />
                             Bomb damage: <b>{mineDamage}</b> points
                         </div>
                     )}
