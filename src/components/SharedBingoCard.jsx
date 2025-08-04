@@ -31,8 +31,9 @@ export default function SharedBingoCard({ cardId }) {
     const [pendingManualUnlocks, setPendingManualUnlocks] = useState(null);
     const [pendingClaimTileIndex, setPendingClaimTileIndex] = useState(null);
 
-    // Tile scaling
+    // Tile scaling and rules
     const [tileSize, setTileSize] = useState(64);
+    const [showTeamBadges, setShowTeamBadges] = useState(true);
 
     // MINES: Animation and penalty tracking
     const [recentMines, setRecentMines] = useState([]);
@@ -40,6 +41,10 @@ export default function SharedBingoCard({ cardId }) {
 
     const [showEarlyConfirmModal, setShowEarlyConfirmModal] = useState(false);
     const [selectedTile, setSelectedTile] = useState(null);
+
+    const [loginTimestamp, setLoginTimestamp] = useState(null);
+    const SESSION_MAX_AGE = 12 * 60 * 60 * 1000; // 12 hours in ms
+    const [sessionExpired, setSessionExpired] = useState(false);
 
 
     useEffect(() => {
@@ -115,6 +120,7 @@ export default function SharedBingoCard({ cardId }) {
                             const enteredHash = await hashString(soloPassword);
                             if (enteredHash === cardData.boardPasswordHash) {
                                 setSoloAccess(true);
+                                setLoginTimestamp(Date.now());
                             } else {
                                 setSoloError("Incorrect password.");
                             }
@@ -193,11 +199,13 @@ export default function SharedBingoCard({ cardId }) {
         if (enteredHash === found.passwordHash) {
             setTeam(found);
             setRole("captain");
+            setLoginTimestamp(Date.now());
             return;
         }
         if (enteredHash === found.memberPasswordHash) {
             setTeam(found);
             setRole("member");
+            setLoginTimestamp(Date.now());
             return;
         }
         setLoginError("Incorrect password.");
@@ -298,6 +306,17 @@ export default function SharedBingoCard({ cardId }) {
     // --- Claim tile logic (auto/manual) ---
     const claimTile = async (tileIndex) => {
         if (!cardData) return;
+
+        if (loginTimestamp && Date.now() - loginTimestamp > SESSION_MAX_AGE) {
+            setSessionExpired(true);
+            return;
+        }
+        if (!navigator.onLine) {
+            setLoginError("You appear to be offline. Please reconnect and try again.");
+            setSessionExpired(true);
+            return;
+        }
+
 
         const newTiles = [...cardData.tiles];
         const tile = newTiles[tileIndex];
@@ -468,6 +487,7 @@ export default function SharedBingoCard({ cardId }) {
             });
         } catch (error) {
             setLoginError("Failed to claim tile.");
+            setSessionExpired(true);
         }
     };
 
@@ -827,6 +847,14 @@ export default function SharedBingoCard({ cardId }) {
                 </motion.h2>
                 {/* --- Tile size bar goes here --- */}
                 <div className="mb-4 w-full flex flex-row justify-center items-center">
+                    <button
+                        className={`mr-2 px-1 py-0.5 rounded text-xs border 
+        ${showTeamBadges ? "bg-blue-400 text-black-700 border-blue-300" : "bg-gray-100 text-gray-600 border-gray-300"}
+        hover:bg-blue-200 hover:text-blue-800 transition`}
+                        onClick={() => setShowTeamBadges(v => !v)}
+                    >
+                        {showTeamBadges ? "Hide Team Badges" : "Show Team Badges"}
+                    </button>
                     <label className="mr-2 font-semibold text-xs text-gray-700 dark:text-gray-400">
                         Tile Size
                     </label>
@@ -1054,6 +1082,7 @@ export default function SharedBingoCard({ cardId }) {
                                         canUnlock={canUnlock}
                                         claimedTeams={isTeamMode ? getClaimedTeams(tile) : []}
                                         currentTeam={isTeamMode ? team : null}
+                                        showTeamBadges={showTeamBadges}
                                     />
                                     {highlight === "eligible" && (
                                         <span
@@ -1103,6 +1132,27 @@ export default function SharedBingoCard({ cardId }) {
                     }}
                     onClose={() => setSelectedTile(null)}
                 />
+            )}
+            {sessionExpired && (
+                <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded shadow-lg text-center">
+                        <h2 className="text-xl font-bold mb-2 text-red-600 dark:text-red-400">Session Expired</h2>
+                        <p className="mb-4 text-gray-700 dark:text-gray-200">
+                            Your session has expired (over 24 hours). Please log in again to continue.
+                        </p>
+                        <button
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded font-semibold"
+                            onClick={() => {
+                                setTeam(null);
+                                setSoloAccess(false);
+                                setLoginTimestamp(null);
+                                setSessionExpired(false);
+                            }}
+                        >
+                            Log In Again
+                        </button>
+                    </div>
+                </div>
             )}
         </motion.div>
     );

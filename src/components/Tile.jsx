@@ -7,7 +7,7 @@ const tileVariants = {
     visible: { opacity: 1, scale: 1 },
 };
 
-const Tile = ({ tile, onClick, claimedTeams = [], canUnlock = false, tileSize = 64, currentTeam }) => {
+const Tile = ({ tile, onClick, claimedTeams = [], canUnlock = false, tileSize = 64, currentTeam, showTeamBadges = true }) => {
     const badgeSize = Math.max(18, Math.round(tileSize * 0.22)); // 18px minimum, ~22% of tile
 
     // Font size for task text (scales with tileSize, clamped for readability)
@@ -137,7 +137,7 @@ const Tile = ({ tile, onClick, claimedTeams = [], canUnlock = false, tileSize = 
                 </svg>
             )}
             {/* Claimed team badges (if any) */}
-            {claimedTeams.length > 0 && (
+            {showTeamBadges && claimedTeams.length > 0 && (
                 <div
                     className="absolute bottom-1 left-1 flex flex-row flex-wrap gap-1 z-10 max-w-full"
                     style={{
