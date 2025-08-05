@@ -1,7 +1,7 @@
 ﻿/* eslint-disable no-unused-vars */
 // src/components/SharedBingoCard.jsx
 import React, { useEffect, useState } from "react";
-import { doc, onSnapshot, updateDoc } from "firebase/firestore";
+import { doc, getDoc, onSnapshot, updateDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import { hashString } from "../utils/crypto";
 import Tile from "./Tile";
@@ -307,6 +307,7 @@ export default function SharedBingoCard({ cardId }) {
     const claimTile = async (tileIndex) => {
         if (!cardData) return;
 
+        // Session checks
         if (loginTimestamp && Date.now() - loginTimestamp > SESSION_MAX_AGE) {
             setSessionExpired(true);
             return;
@@ -317,8 +318,21 @@ export default function SharedBingoCard({ cardId }) {
             return;
         }
 
-
-        const newTiles = [...cardData.tiles];
+        // --- Fetch latest board from Firestore ---
+        const cardRef = doc(db, "bingoCards", cardId);
+        let latestDoc;
+        try {
+            latestDoc = await getDoc(cardRef);
+        } catch (err) {
+            setLoginError("Could not load latest board data.");
+            return;
+        }
+        if (!latestDoc.exists()) {
+            setLoginError("Board not found.");
+            return;
+        }
+        const latestBoard = latestDoc.data();
+        const newTiles = [...latestBoard.tiles];
         const tile = newTiles[tileIndex];
 
         if (isTeamMode) {
@@ -481,7 +495,7 @@ export default function SharedBingoCard({ cardId }) {
         }
 
         try {
-            await updateDoc(doc(db, "bingoCards", cardId), {
+            await updateDoc(cardRef, {
                 tiles: newTiles,
                 lastUpdated: new Date().toISOString(),
             });
