@@ -791,36 +791,7 @@ export default function SharedBingoCard({ cardId }) {
                             </div>
                         ))}
                     </div>
-                    <h3 className="text-xl font-bold mt-4">
-                        Available Tasks ({getVisibleTiles().filter((t) => t.visible && !t.completed).length})
-                    </h3>
-                    <div className="flex flex-col gap-2 max-h-[70vh] overflow-auto pr-2">
-                        {getVisibleTiles()
-                            .filter((t) => t.visible && !t.completed)
-                            .map((t, idx) => (
-                                <motion.div
-                                    key={idx}
-                                    className="border p-2 rounded-lg shadow flex flex-col gap-1 bg-white dark:bg-gray-700"
-                                    initial={{ y: 10, opacity: 0 }}
-                                    animate={{ y: 0, opacity: 1 }}
-                                    transition={{ delay: 0.05 * idx }}
-                                >
-                                    <span className="font-semibold">{t.task?.name}</span>
-                                    <span className="text-sm text-gray-600 dark:text-gray-300">
-                                        {t.task?.description}
-                                    </span>
-                                    {t.task?.difficulty != null && (
-                                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                                            Difficulty: {t.task.difficulty}
-                                        </span>
-                                    )}
-                                    <span className="text-xs text-gray-500 dark:text-gray-400">
-                                        Value: {t.task?.value ?? 1}
-                                    </span>
-                                </motion.div>
-                            ))}
-                    </div>
-                    {/* --- Mines Info --- */}
+                    {/* Mines Info */}
                     {mineCount > 0 && unlockMode === "manual" && (
                         <div className="mt-4 bg-yellow-50 dark:bg-yellow-900 text-yellow-900 dark:text-yellow-100 rounded px-4 py-2 font-semibold shadow">
                             <span role="img" aria-label="mine">💣</span> Mines left: <b>{minesLeft}</b><br />
@@ -1124,7 +1095,41 @@ export default function SharedBingoCard({ cardId }) {
                     </AnimatePresence>
                 </div>
             </div>
+            {(isTeamMode || isSoloMode) && (
+                <aside className="w-full md:w-72 flex flex-col gap-4 md:ml-6">
+                    <h3 className="text-xl font-bold mt-4">
+                        Available Tasks ({getVisibleTiles().filter((t) => t.visible && !t.completed).length})
+                    </h3>
+                    <div className="flex flex-col gap-2 max-h-[70vh] overflow-auto pr-2">
+                        {getVisibleTiles()
+                            .filter((t) => t.visible && !t.completed)
+                            .map((t, idx) => (
+                                <motion.div
+                                    key={idx}
+                                    className="border p-2 rounded-lg shadow flex flex-col gap-1 bg-white dark:bg-gray-700"
+                                    initial={{ y: 10, opacity: 0 }}
+                                    animate={{ y: 0, opacity: 1 }}
+                                    transition={{ delay: 0.05 * idx }}
+                                >
+                                    <span className="font-semibold">{t.task?.name}</span>
+                                    <span className="text-sm text-gray-600 dark:text-gray-300">
+                                        {t.task?.description}
+                                    </span>
+                                    {t.task?.difficulty != null && (
+                                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                                            Difficulty: {t.task.difficulty}
+                                        </span>
+                                    )}
+                                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                                        Value: {t.task?.value ?? 1}
+                                    </span>
+                                </motion.div>
+                            ))}
+                    </div>
+                </aside>
+            )}
             {selectedTile && (
+                <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
                 <TaskInfoModal
                     tile={selectedTile}
                     claimedTeams={isTeamMode ? getClaimedTeams(selectedTile) : []}
@@ -1146,6 +1151,7 @@ export default function SharedBingoCard({ cardId }) {
                     }}
                     onClose={() => setSelectedTile(null)}
                 />
+                </div>
             )}
             {sessionExpired && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
