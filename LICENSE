@@ -1,0 +1,26 @@
+MineTasker License (based on CC BY-NC 4.0)
+
+Copyright (c) 2025 Chase Walters
+
+You are free to:
+- Share — copy and redistribute the material in any medium or format
+- Adapt — remix, transform, and build upon the material
+
+Under the following terms:
+- **Attribution** — You must give appropriate credit, provide a link to the license, and indicate if changes were made.
+- **NonCommercial** — You may not use the material for commercial purposes, except with explicit written permission from the copyright holder.
+- **Commercial Use** — Commercial use is permitted only by request and with explicit written permission from Chase Walters. Contact via email at ChaseWalters1@yahoo.com for inquiries.
+- **Database Restriction** — You may NOT use the creator's Firebase or any connected database instance. You must configure and deploy your own database for any copy or derivative work.
+
+For more details on the CC BY-NC 4.0 license, see https://creativecommons.org/licenses/by-nc/4.0/
+
+---
+
+**Special Clause:**  
+Any use of this software must use a separate database instance from the original project.  
+Do not use, connect to, or attempt to access the Firebase credentials, API keys, or data owned by the original creator or this repository.  
+You must configure your own Firebase project or alternative backend.
+
+---
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
