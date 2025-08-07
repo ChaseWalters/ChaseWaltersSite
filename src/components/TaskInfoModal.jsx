@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function TaskInfoModal({ tile, claimedTeams, canClaim, onClaim, onClose }) {
+export default function TaskInfoModal({ tile, claimedTeams, firstClaimBonus = 0, canClaim, onClaim, onClose }) {
     const task = tile.task || {};
     return (
         <div
@@ -41,11 +41,18 @@ export default function TaskInfoModal({ tile, claimedTeams, canClaim, onClaim, o
                     <span className="font-semibold">Claimed by:</span>
                     {claimedTeams.length === 0
                         ? <span className="ml-1 text-gray-500">No one</span>
-                        : claimedTeams.map(team => (
-                            <span
-                                key={team.name}
-                                className="inline-block ml-2 px-2 py-0.5 rounded text-white text-xs"
-                                style={{ background: team.color }}>{team.name}</span>
+                        : claimedTeams.map((team, index) => (
+                            <span key={team.name} className="inline-block ml-2">
+                                <span
+                                    className="inline-block px-2 py-0.5 rounded text-white text-xs"
+                                    style={{ background: team.color }}
+                                >
+                                    {team.name}
+                                    {index === 0 && firstClaimBonus > 0 && (
+                                        <span className="ml-1 font-bold text-yellow-300">+{firstClaimBonus}</span>
+                                    )}
+                                </span>
+                            </span>
                         ))}
                 </div>
                 {canClaim && (

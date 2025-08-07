@@ -244,6 +244,8 @@ export default function SharedBingoCard({ cardId }) {
     // --- Team scoring ---
     function getTeamScores() {
         if (!cardData || !isTeamMode) return [];
+        const firstClaimBonus = cardData.firstClaimBonus || 0;
+        
         return (cardData.teams || []).map((t) => {
             const claimed = cardData.tiles.filter(tile => {
                 const claimedBy = Array.isArray(tile.claimedBy)
@@ -253,7 +255,22 @@ export default function SharedBingoCard({ cardId }) {
                         : [];
                 return claimedBy.includes(t.name);
             });
-            const score = claimed.reduce((sum, tile) => sum + (typeof tile.task?.value === "number" ? tile.task.value : 1), 0);
+            
+            let score = claimed.reduce((sum, tile) => sum + (typeof tile.task?.value === "number" ? tile.task.value : 1), 0);
+            
+            // Add first claim bonus if enabled
+            if (firstClaimBonus > 0) {
+                const firstClaims = claimed.filter(tile => {
+                    const claimedBy = Array.isArray(tile.claimedBy)
+                        ? tile.claimedBy
+                        : tile.claimedBy
+                            ? [tile.claimedBy]
+                            : [];
+                    return claimedBy.length > 0 && claimedBy[0] === t.name;
+                });
+                score += firstClaims.length * firstClaimBonus;
+            }
+            
             return { ...t, score };
         });
     }
@@ -1163,6 +1180,7 @@ export default function SharedBingoCard({ cardId }) {
                 <TaskInfoModal
                     tile={selectedTile}
                     claimedTeams={isTeamMode ? getClaimedTeams(selectedTile) : []}
+                    firstClaimBonus={cardData.firstClaimBonus || 0}
                     canClaim={
                         // SOLO: visible & not completed
                         (!isTeamMode && selectedTile.visible && !selectedTile.completed)
