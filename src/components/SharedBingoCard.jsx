@@ -258,6 +258,23 @@ export default function SharedBingoCard({ cardId }) {
         });
     }
 
+    // Helper to show first claim bonus in modal
+    function getTileFirstClaimBonusInfo(tile) {
+        const firstClaimBonus = cardData?.firstClaimBonus ?? 0;
+        const claimedBy = Array.isArray(tile.claimedBy)
+            ? tile.claimedBy
+            : tile.claimedBy
+                ? [tile.claimedBy]
+                : [];
+        if (firstClaimBonus > 0 && claimedBy.length > 0 && !tile.isMine) {
+            return {
+                firstTeam: claimedBy[0],
+                bonus: firstClaimBonus
+            };
+        }
+        return null;
+    }
+
     // --- Neighbor helpers (for unlock logic) ---
     function getNeighborIndices(tile, boardSize, neighborMode = "8") {
         const neighbors = [];
@@ -1160,27 +1177,26 @@ export default function SharedBingoCard({ cardId }) {
             )}
             {selectedTile && (
                 <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-                <TaskInfoModal
-                    tile={selectedTile}
-                    claimedTeams={isTeamMode ? getClaimedTeams(selectedTile) : []}
-                    canClaim={
-                        // SOLO: visible & not completed
-                        (!isTeamMode && selectedTile.visible && !selectedTile.completed)
-                        // TEAM: visible, not already claimed by this team, and captain
-                        || (isTeamMode && team && role === "captain" && selectedTile.visible &&
-                            !(
-                                Array.isArray(selectedTile.claimedBy)
-                                    ? selectedTile.claimedBy.includes(team.name)
-                                    : selectedTile.claimedBy === team.name
+                    <TaskInfoModal
+                        tile={selectedTile}
+                        claimedTeams={isTeamMode ? getClaimedTeams(selectedTile) : []}
+                        firstClaimBonusInfo={isTeamMode ? getTileFirstClaimBonusInfo(selectedTile) : null}
+                        canClaim={
+                            (!isTeamMode && selectedTile.visible && !selectedTile.completed)
+                            || (isTeamMode && team && role === "captain" && selectedTile.visible &&
+                                !(
+                                    Array.isArray(selectedTile.claimedBy)
+                                        ? selectedTile.claimedBy.includes(team.name)
+                                        : selectedTile.claimedBy === team.name
+                                )
                             )
-                        )
-                    }
-                    onClaim={() => {
-                        claimTile(selectedTile.__index);
-                        setSelectedTile(null);
-                    }}
-                    onClose={() => setSelectedTile(null)}
-                />
+                        }
+                        onClaim={() => {
+                            claimTile(selectedTile.__index);
+                            setSelectedTile(null);
+                        }}
+                        onClose={() => setSelectedTile(null)}
+                    />
                 </div>
             )}
             {sessionExpired && (
