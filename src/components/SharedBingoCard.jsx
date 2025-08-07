@@ -1195,27 +1195,36 @@ export default function SharedBingoCard({ cardId }) {
                 </aside>
             )}
             {selectedTile && (
-                <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-                    <TaskInfoModal
-                        tile={selectedTile}
-                        claimedTeams={isTeamMode ? getClaimedTeams(selectedTile) : []}
-                        firstClaimBonusInfo={isTeamMode ? getTileFirstClaimBonusInfo(selectedTile) : null}
-                        canClaim={
-                            (!isTeamMode && selectedTile.visible && !selectedTile.completed)
-                            || (isTeamMode && team && role === "captain" && selectedTile.visible &&
-                                !(
-                                    Array.isArray(selectedTile.claimedBy)
-                                        ? selectedTile.claimedBy.includes(team.name)
-                                        : selectedTile.claimedBy === team.name
+                <div
+                    className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50"
+                    onClick={() => setSelectedTile(null)}
+                    tabIndex={-1}
+                >
+                    <div
+                        onClick={e => e.stopPropagation()}
+                        className="max-w-xs w-full"
+                    >
+                        <TaskInfoModal
+                            tile={selectedTile}
+                            claimedTeams={isTeamMode ? getClaimedTeams(selectedTile) : []}
+                            firstClaimBonusInfo={isTeamMode ? getTileFirstClaimBonusInfo(selectedTile) : null}
+                            canClaim={
+                                (!isTeamMode && selectedTile.visible && !selectedTile.completed)
+                                || (isTeamMode && team && role === "captain" && selectedTile.visible &&
+                                    !(
+                                        Array.isArray(selectedTile.claimedBy)
+                                            ? selectedTile.claimedBy.includes(team.name)
+                                            : selectedTile.claimedBy === team.name
+                                    )
                                 )
-                            )
-                        }
-                        onClaim={() => {
-                            claimTile(selectedTile.__index);
-                            setSelectedTile(null);
-                        }}
-                        onClose={() => setSelectedTile(null)}
-                    />
+                            }
+                            onClaim={() => {
+                                claimTile(selectedTile.__index);
+                                setSelectedTile(null);
+                            }}
+                            onClose={() => setSelectedTile(null)}
+                        />
+                    </div>
                 </div>
             )}
             {sessionExpired && (
