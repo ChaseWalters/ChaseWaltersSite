@@ -1162,11 +1162,11 @@ export default function SharedBingoCard({ cardId }) {
                 </div>
             </div>
             {(isTeamMode || isSoloMode) && (
-                <aside className="w-full md:w-72 flex flex-col gap-4 md:ml-6 h-screen">
+                <aside className="w-full md:w-72 flex flex-col gap-4 md:ml-6 h-screen pb-8">
                     <h3 className="text-xl font-bold py-2">
                         Available Tasks ({getVisibleTiles().filter((t) => t.visible && !t.completed).length})
                     </h3>
-                    <div className="flex-1 flex flex-col gap-2 overflow-y-auto pr-2">
+                    <div className="flex-1 flex flex-col gap-2 overflow-y-auto pr-2" style={{ maxHeight: 'calc(100vh - 100px)' }}>
                         {getVisibleTiles()
                             .filter((t) => t.visible && !t.completed)
                             .map((t, idx) => (
