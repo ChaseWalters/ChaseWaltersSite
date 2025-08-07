@@ -244,7 +244,9 @@ export default function SharedBingoCard({ cardId }) {
     // --- Team scoring ---
     function getTeamScores() {
         if (!cardData || !isTeamMode) return [];
+        const firstClaimBonus = cardData?.firstClaimBonus ?? 0;
         return (cardData.teams || []).map((t) => {
+            let score = 0;
             const claimed = cardData.tiles.filter(tile => {
                 const claimedBy = Array.isArray(tile.claimedBy)
                     ? tile.claimedBy
@@ -253,7 +255,24 @@ export default function SharedBingoCard({ cardId }) {
                         : [];
                 return claimedBy.includes(t.name);
             });
-            const score = claimed.reduce((sum, tile) => sum + (typeof tile.task?.value === "number" ? tile.task.value : 1), 0);
+            claimed.forEach(tile => {
+                const claimedBy = Array.isArray(tile.claimedBy)
+                    ? tile.claimedBy
+                    : tile.claimedBy
+                        ? [tile.claimedBy]
+                        : [];
+                // Add tile value
+                score += typeof tile.task?.value === "number" ? tile.task.value : 1;
+                // Add first claim bonus ONLY if this team is first to claim, bonus is enabled, and tile is not mine
+                if (
+                    firstClaimBonus > 0 &&
+                    claimedBy.length > 0 &&
+                    claimedBy[0] === t.name &&
+                    !tile.isMine
+                ) {
+                    score += firstClaimBonus;
+                }
+            });
             return { ...t, score };
         });
     }
