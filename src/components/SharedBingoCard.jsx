@@ -768,7 +768,7 @@ export default function SharedBingoCard({ cardId }) {
     // --- Render ---
     return (
         <motion.div
-            className="min-h-screen flex flex-col md:flex-row p-0 md:p-4 gap-6 bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+            className="h-screen overflow-hidden flex flex-col md:flex-row p-0 md:p-4 gap-6 bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
         >
@@ -1097,10 +1097,10 @@ export default function SharedBingoCard({ cardId }) {
             </div>
             {(isTeamMode || isSoloMode) && (
                 <aside className="w-full md:w-72 flex flex-col gap-4 md:ml-6 h-screen">
-                    <h3 className="text-xl font-bold mt-4">
+                    <h3 className="text-xl font-bold py-2">
                         Available Tasks ({getVisibleTiles().filter((t) => t.visible && !t.completed).length})
                     </h3>
-                    <div className="flex flex-col gap-2 overflow-y-auto pr-2 max-h-[calc(100vh-5rem)]">
+                    <div className="flex-1 flex flex-col gap-2 overflow-y-auto pr-2">
                         {getVisibleTiles()
                             .filter((t) => t.visible && !t.completed)
                             .map((t, idx) => (
