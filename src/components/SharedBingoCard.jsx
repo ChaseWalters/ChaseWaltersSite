@@ -59,6 +59,34 @@ export default function SharedBingoCard({ cardId }) {
         return () => unsubscribe();
     }, [cardId]);
 
+    useEffect(() => {
+        function updateTileSize() {
+            // Estimate header/controls height (adjust as needed)
+            const headerHeight = 140; // e.g., title + controls + some margin
+            const availableHeight = window.innerHeight - headerHeight;
+
+            // Board size (number of tiles per row/col)
+            // Use cardData.boardSize or default to 5
+            const gridSize = cardData?.gridSize || cardData?.boardSize || 5;
+
+            // Calculate tile size
+            // Subtract 8px for each gap between tiles (e.g., gap-1 = 0.25rem = 4px)
+            // So total gaps = (gridSize - 1) * gap
+            const gap = 4;
+            const totalGaps = (gridSize - 1) * gap;
+            const maxTileSize = Math.floor((availableHeight - totalGaps) / gridSize);
+
+            // Clamp tile size
+            const clampedSize = Math.max(40, Math.min(120, maxTileSize));
+
+            setTileSize(clampedSize);
+        }
+
+        updateTileSize();
+        window.addEventListener("resize", updateTileSize);
+        return () => window.removeEventListener("resize", updateTileSize);
+    }, [cardData?.gridSize, cardData?.boardSize]);
+
     // --- Early loading/error states ---
     if (cardData === null) {
         return (
@@ -76,6 +104,8 @@ export default function SharedBingoCard({ cardId }) {
             </div>
         );
     }
+
+
 
     // --- Extract key settings ---
     const isSoloMode = cardData && cardData.mode === "individual";

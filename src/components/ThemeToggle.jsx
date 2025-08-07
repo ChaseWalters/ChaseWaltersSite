@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { FaMoon, FaSun } from "react-icons/fa";
 
 export default function ThemeToggle() {
-    const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "light");
+    const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
 
     useEffect(() => {
         localStorage.setItem("theme", theme);
