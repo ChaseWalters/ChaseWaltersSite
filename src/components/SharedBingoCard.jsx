@@ -61,31 +61,26 @@ export default function SharedBingoCard({ cardId }) {
 
     useEffect(() => {
         function updateTileSize() {
-            // Estimate header/controls height (adjust as needed)
-            const headerHeight = 140; // e.g., title + controls + some margin
-            const availableHeight = window.innerHeight - headerHeight;
-
-            // Board size (number of tiles per row/col)
-            // Use cardData.boardSize or default to 5
+            // Mobile: smaller tiles
+            const isMobile = window.innerWidth < 640;
             const gridSize = cardData?.gridSize || cardData?.boardSize || 5;
-
-            // Calculate tile size
-            // Subtract 8px for each gap between tiles (e.g., gap-1 = 0.25rem = 4px)
-            // So total gaps = (gridSize - 1) * gap
-            const gap = 4;
-            const totalGaps = (gridSize - 1) * gap;
-            const maxTileSize = Math.floor((availableHeight - totalGaps) / gridSize);
-
-            // Clamp tile size
-            const clampedSize = Math.max(40, Math.min(120, maxTileSize));
-
-            setTileSize(clampedSize);
+            let size;
+            if (isMobile) {
+                size = Math.max(40, Math.min(72, Math.floor(window.innerWidth / (gridSize + 1))));
+            } else {
+                // Your previous logic for desktop
+                const headerHeight = 140;
+                const availableHeight = window.innerHeight - headerHeight;
+                const gap = 4;
+                const totalGaps = (gridSize - 1) * gap;
+                size = Math.max(10, Math.min(120, Math.floor((availableHeight - totalGaps) / gridSize)));
+            }
+            setTileSize(size);
         }
-
         updateTileSize();
         window.addEventListener("resize", updateTileSize);
         return () => window.removeEventListener("resize", updateTileSize);
-    }, [cardData?.gridSize, cardData?.boardSize]);
+        }, [cardData?.gridSize, cardData?.boardSize]);
 
     // --- Early loading/error states ---
     if (cardData === null) {
@@ -834,7 +829,7 @@ export default function SharedBingoCard({ cardId }) {
     // --- Render ---
     return (
         <motion.div
-            className="h-screen overflow-hidden flex flex-col md:flex-row p-0 md:p-4 gap-6 bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+            className="h-screen flex flex-col md:flex-row p-0 md:p-4 gap-6 bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-y-auto md:overflow-y-hidden"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
         >
@@ -911,7 +906,7 @@ export default function SharedBingoCard({ cardId }) {
                     </label>
                     <input
                         type="range"
-                        min={40}
+                        min={10}
                         max={120}
                         value={tileSize}
                         onChange={e => setTileSize(Number(e.target.value))}
